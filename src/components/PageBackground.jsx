@@ -69,7 +69,7 @@ export default function PageBackground({ pathname }) {
             isFading ? 'opacity-0' : 'opacity-100'
           }`}
           style={{
-            backgroundImage: `linear-gradient(135deg, rgba(243, 248, 245, 0.86) 0%, rgba(232, 246, 237, 0.82) 100%), url('${prevImage}')`,
+            backgroundImage: `linear-gradient(135deg, rgba(243, 248, 245, 0.98) 0%, rgba(232, 246, 237, 0.97) 100%), url('${prevImage}')`,
           }}
         />
       )}
@@ -80,7 +80,7 @@ export default function PageBackground({ pathname }) {
           isFading ? 'opacity-100 animate-fade-in' : 'opacity-100'
         }`}
         style={{
-          backgroundImage: `linear-gradient(135deg, rgba(243, 248, 245, 0.86) 0%, rgba(232, 246, 237, 0.82) 100%), url('${currentImage}')`,
+          backgroundImage: `linear-gradient(135deg, rgba(243, 248, 245, 0.98) 0%, rgba(232, 246, 237, 0.97) 100%), url('${currentImage}')`,
         }}
       />
 

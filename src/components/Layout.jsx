@@ -725,7 +725,7 @@ export default function Layout() {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto p-main md:p-6 min-w-0 pb-safe">
+        <main className="flex-1 overflow-y-auto p-main md:p-6 min-w-0 pb-safe relative z-10" style={{ backgroundColor: '#f8fafc' }}>
           <Outlet />
         </main>
       </div>

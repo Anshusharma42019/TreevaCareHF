@@ -72,7 +72,7 @@ function WeeklyBarChart({ monthlyChart }) {
 }
 
 const cardCls = "bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow";
-const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
+const cardStyle = { backgroundColor: '#ffffff', background: '#ffffff', border: '1px solid rgba(226, 232, 240, 0.9)', boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.05)' };
 
 const icons = {
   cnp: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M16.5 1.5a4.5 4.5 0 0 1 4.5 4.5v12a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 18V6a4.5 4.5 0 0 1 4.5-4.5h9z"/><line x1="4" y1="4" x2="20" y2="20"/></svg>,
@@ -281,7 +281,7 @@ export default function StaffDashboard() {
   const workingTime = useLiveTimer(attStatus?.checkIn && !attStatus?.checkOut ? attStatus.checkIn : null);
 
   useEffect(() => {
-    if (!['sales', 'support'].includes(user?.role)) return;
+    if (!['sales', 'support', 'logistics', 'staff'].includes(user?.role)) return;
     let cancelled = false;
     setDeliveryLoading(true);
     fetchMyDeliveryStats(deliveryMonth.month, deliveryMonth.year)
@@ -428,7 +428,7 @@ export default function StaffDashboard() {
   };
 
   const done = stats?.todayVerifications ?? stats?.verifiedCount ?? 0;
-  const target = stats?.todayTarget || 0;
+  const target = stats?.todayTarget || 5;
   const remaining = target > 0 ? Math.max(target - done, 0) : 0;
   const achieved = target > 0 && done >= target;
   const progressPct = target > 0 ? Math.min(Math.round((done / target) * 100), 100) : 0;
@@ -519,11 +519,11 @@ export default function StaffDashboard() {
   }, [workFilter, workCustomDate]);
 
   const workQueues = [
-    { key: 'verifications', label: 'Verification Tasks', icon: icons.verification, color: 'text-blue-600', bg: 'bg-blue-50', list: workLists.verificationList || [], path: '/verification' },
-    { key: 'callAgain', label: 'Call Again', icon: icons.callAgain, color: 'text-yellow-600', bg: 'bg-yellow-50', list: workLists.callAgainList || [], path: '/call-again' },
-    { key: 'cnp', label: 'CNP', icon: icons.cnp, color: 'text-red-500', bg: 'bg-red-50', list: workLists.cnpList || [], path: '/cnp' },
-    { key: 'interested', label: 'Interested', icon: icons.interested, color: 'text-green-600', bg: 'bg-green-50', list: workLists.interestedList || [], path: '/pipeline' },
-    { key: 'onHold', label: 'On Hold', icon: icons.callAgain, color: 'text-gray-600', bg: 'bg-gray-50', list: workLists.onHoldList || [], path: '/verification' },
+    { key: 'verifications', label: 'Verification Tasks', icon: icons.verification, color: 'text-blue-600', bg: 'bg-blue-50', list: workLists?.verificationList || [], path: '/verification' },
+    { key: 'callAgain', label: 'Call Again', icon: icons.callAgain, color: 'text-yellow-600', bg: 'bg-yellow-50', list: workLists?.callAgainList || [], path: '/call-again' },
+    { key: 'cnp', label: 'CNP', icon: icons.cnp, color: 'text-red-500', bg: 'bg-red-50', list: workLists?.cnpList || [], path: '/cnp' },
+    { key: 'interested', label: 'Interested', icon: icons.interested, color: 'text-green-600', bg: 'bg-green-50', list: workLists?.interestedList || [], path: '/pipeline' },
+    { key: 'onHold', label: 'On Hold', icon: icons.callAgain, color: 'text-gray-600', bg: 'bg-gray-50', list: workLists?.onHoldList || [], path: '/verification' },
   ];
 
   const openWorkItem = (queue, item) => {
@@ -932,7 +932,7 @@ export default function StaffDashboard() {
       </div>
 
       {/* Target History */}
-      <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div className="bg-white rounded-2xl overflow-hidden" style={cardStyle}>
         {/* Header */}
         <div className="px-5 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: '1px solid #f3f4f6' }}>
           <div className="flex items-center gap-2.5">
@@ -1093,7 +1093,7 @@ export default function StaffDashboard() {
       </div>
 
       {/* My Delivery Score */}
-      {['sales', 'support'].includes(user?.role) && (
+      {['sales', 'support', 'logistics', 'staff'].includes(user?.role) && (
         <MyDeliveryScoreCard
           user={user}
           myDelivery={myDelivery}

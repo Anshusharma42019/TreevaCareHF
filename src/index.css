@@ -32,7 +32,7 @@ h1, h2, h3, .font-display {
 }
 
 html, body, #root, .theme-root, main, .md\:ml-64 {
-  background-color: #F3F8F5 !important;
+  background-color: #f8fafc !important;
   color: #0F172A;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -63,21 +63,14 @@ html {
   background: rgba(22, 101, 52, 0.45);
 }
 
-/* Translucent Glass Card Containers */
+/* Solid White Card Containers */
 .glass,
 .premium-card,
-.bg-white,
-div.bg-white,
-section.bg-white,
-main div.bg-white,
-.rounded-2xl.shadow-sm,
-.rounded-xl.shadow-sm,
-.rounded-3xl.shadow-sm {
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(25px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(25px) saturate(180%) !important;
-  border: 1.5px solid rgba(203, 213, 225, 0.8) !important;
-  box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.05), 0 2px 6px 0 rgba(0, 0, 0, 0.02) !important;
+.bg-white {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
 }
 
 /* Gray Panels & Table Containers */

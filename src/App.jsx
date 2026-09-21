@@ -50,7 +50,7 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Navigate to={user?.role === 'doctor' ? '/doctor-dashboard' : '/dashboard'} replace />} />
         <Route path="dashboard" element={
-          ['sales', 'support', 'logistics'].includes(user?.role)
+          ['sales', 'support', 'logistics', 'staff'].includes(user?.role)
             ? <StaffDashboard />
             : <ProtectedRoute roles={['admin', 'manager']}><Dashboard /></ProtectedRoute>
         } />
@@ -138,7 +138,7 @@ function AppRoutes() {
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics']}><Notifications /></ProtectedRoute>
         } />
         <Route path="users" element={
-          <ProtectedRoute roles={['admin', 'manager']}>
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics', 'doctor', 'staff']}>
             <Users />
           </ProtectedRoute>
         } />
