@@ -93,31 +93,31 @@ function AppRoutes() {
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><ReadyToShipment /></ProtectedRoute>
         } />
         <Route path="shiprocket" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><Shiprocket /></ProtectedRoute>
         } />
         <Route path="shiprocket/orders" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket initialSection="orders" /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><Shiprocket initialSection="orders" /></ProtectedRoute>
         } />
         <Route path="shiprocket/shipments" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket initialSection="shipments" /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><Shiprocket initialSection="shipments" /></ProtectedRoute>
         } />
         <Route path="shiprocket/returns" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket initialSection="returns" initialReturnsTab="returns" /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><Shiprocket initialSection="returns" initialReturnsTab="returns" /></ProtectedRoute>
         } />
         <Route path="shiprocket/ndr" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><NdrPage /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><NdrPage /></ProtectedRoute>
         } />
         <Route path="shiprocket/ndr/detail" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><NdrDetail /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><NdrDetail /></ProtectedRoute>
         } />
         <Route path="shipmaxx" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics', 'support']}><Shipmaxx /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'logistics', 'support']}><Shipmaxx /></ProtectedRoute>
         } />
         <Route path="shipmaxx/ndr" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><ShipmaxxNdr /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><ShipmaxxNdr /></ProtectedRoute>
         } />
         <Route path="shipmaxx/followup" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics', 'support']}><ShipmaxxFollowup /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'logistics', 'support']}><ShipmaxxFollowup /></ProtectedRoute>
         } />
         <Route path="account" element={
           <ProtectedRoute roles={['admin', 'manager']}><Account /></ProtectedRoute>
@@ -138,12 +138,12 @@ function AppRoutes() {
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics']}><Notifications /></ProtectedRoute>
         } />
         <Route path="users" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics', 'doctor', 'staff']}>
+          <ProtectedRoute roles={['admin', 'manager']}>
             <Users />
           </ProtectedRoute>
         } />
         <Route path="staff-activity" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics']}>
+          <ProtectedRoute roles={['admin', 'manager']}>
             <StaffActivity />
           </ProtectedRoute>
         } />

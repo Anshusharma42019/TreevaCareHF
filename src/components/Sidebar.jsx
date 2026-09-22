@@ -100,23 +100,23 @@ const NAV_GROUPS = [
         icon: <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0C2.678 5.578 2.25 6.058 2.25 6.626v1.442" /></svg>
       },
       {
-        to: '/shiprocket', label: 'Shiprocket', roles: ['admin', 'manager', 'sales', 'logistics'], end: true,
+        to: '/shiprocket', label: 'Shiprocket', roles: ['admin', 'manager', 'logistics'], end: true,
         icon: <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.24a6 6 0 00-5.84 7.381h4.8m2.58-5.84a14.98 14.98 0 015.84-2.58" /></svg>
       },
       {
-        to: '/shiprocket/ndr', label: 'NDR', roles: ['admin', 'manager', 'sales', 'logistics'],
+        to: '/shiprocket/ndr', label: 'NDR', roles: ['admin', 'manager', 'logistics'],
         icon: <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
       },
       {
-        to: '/shipmaxx', label: 'ShipMaxx', roles: ['admin', 'manager', 'sales', 'logistics'], end: true,
+        to: '/shipmaxx', label: 'ShipMaxx', roles: ['admin', 'manager', 'logistics'], end: true,
         icon: <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0C2.678 5.578 2.25 6.058 2.25 6.626v1.442" /></svg>
       },
       {
-        to: '/shipmaxx/ndr', label: 'ShipMaxx NDR', roles: ['admin', 'manager', 'sales', 'logistics'],
+        to: '/shipmaxx/ndr', label: 'ShipMaxx NDR', roles: ['admin', 'manager', 'logistics'],
         icon: <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
       },
       {
-        to: '/shipmaxx/followup', label: 'ShipMaxx Follow Up', roles: ['admin', 'manager', 'sales', 'logistics', 'support'], end: true,
+        to: '/shipmaxx/followup', label: 'ShipMaxx Follow Up', roles: ['admin', 'manager', 'logistics', 'support'], end: true,
         icon: <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-.64-.034-1.277-.08-1.91-.137a2.228 2.228 0 01-1.98-2.193v-4.286c0-.97.616-1.813 1.5-2.097M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
       },
     ]
@@ -156,11 +156,11 @@ const NAV_GROUPS = [
         icon: <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
       },
       {
-        to: '/users', label: 'Staff', roles: ['admin', 'manager', 'sales', 'support', 'logistics', 'doctor', 'staff'],
+        to: '/users', label: 'Staff', roles: ['admin', 'manager'],
         icon: <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
       },
       {
-        to: '/staff-activity', label: 'Staff Activity', roles: ['admin', 'manager', 'sales', 'support', 'logistics'],
+        to: '/staff-activity', label: 'Staff Activity', roles: ['admin', 'manager'],
         icon: <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
       },
     ]
