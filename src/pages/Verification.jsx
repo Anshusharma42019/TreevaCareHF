@@ -332,11 +332,14 @@ export default function Verification() {
         return;
       }
       await updateVerificationStatus(selected._id, status, holdDate, holdReason);
-      if (status === 'verified' || status === 'on_hold') {
+      if (['verified', 'dispatch', 'dispatched', 'rejected', 'on_hold'].includes(status)) {
         setRecords(prev => prev.filter(r => r._id !== selected._id));
+        setOnHoldRecords(prev => prev.filter(r => r._id !== selected._id));
         setSelected(null);
         if (status === 'on_hold') {
-          await loadOnHold();
+          await loadOnHold(true);
+        } else {
+          await load(true);
         }
       } else if (status === 'pending') {
         setOnHoldRecords(prev => prev.filter(r => r._id !== selected._id));
