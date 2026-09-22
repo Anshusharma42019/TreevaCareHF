@@ -322,40 +322,42 @@ export default function Verification() {
   };
 
   const handleStatusUpdate = async (status, holdDate = null, holdReason = null) => {
-    setUpdating(selected._id);
+    const target = selected;
+    if (!target?._id) return;
+    setUpdating(target._id);
+
+    const isRemovingStatus = ['verified', 'dispatch', 'dispatched', 'rejected', 'on_hold'].includes(status);
+
+    // ⚡ Instant Optimistic UI Removal (0.1ms)
+    if (isRemovingStatus) {
+      setRecords(prev => prev.filter(r => r._id !== target._id));
+      setOnHoldRecords(prev => prev.filter(r => r._id !== target._id));
+      setSelected(null);
+    }
+
     try {
-      if (status === 'pending' && !selected.task) {
-        const leadId = selected.lead?._id || selected.lead;
+      if (status === 'pending' && !target.task) {
+        const leadId = target.lead?._id || target.lead;
         if (leadId) await updateLead(leadId, { status: 'new' });
-        setOnHoldRecords(prev => prev.filter(r => r._id !== selected._id));
+        setOnHoldRecords(prev => prev.filter(r => r._id !== target._id));
         setSelected(null);
         return;
       }
-      await updateVerificationStatus(selected._id, status, holdDate, holdReason);
-      if (['verified', 'dispatch', 'dispatched', 'rejected', 'on_hold'].includes(status)) {
-        setRecords(prev => prev.filter(r => r._id !== selected._id));
-        setOnHoldRecords(prev => prev.filter(r => r._id !== selected._id));
-        setSelected(null);
-        if (status === 'on_hold') {
-          await loadOnHold(true);
-        } else {
-          await load(true);
-        }
-      } else if (status === 'pending') {
-        setOnHoldRecords(prev => prev.filter(r => r._id !== selected._id));
-        setSelected(null);
-        await load();
+      await updateVerificationStatus(target._id, status, holdDate, holdReason);
+      if (status === 'on_hold') {
+        loadOnHold(true);
       } else {
-        setRecords(prev => prev.map(r => r._id === selected._id ? { ...r, status } : r));
-        setSelected(prev => prev ? { ...prev, status } : null);
+        load(true);
       }
     } catch (err) {
       if (err.response?.status === 404) {
-        setRecords(prev => prev.filter(r => r._id !== selected._id));
-        setOnHoldRecords(prev => prev.filter(r => r._id !== selected._id));
+        setRecords(prev => prev.filter(r => r._id !== target._id));
+        setOnHoldRecords(prev => prev.filter(r => r._id !== target._id));
         setSelected(null);
-        await load();
       } else {
+        if (isRemovingStatus) {
+          load(true); // Re-fetch on error to revert optimistic deletion if failed
+        }
         alert(err.response?.data?.message || err.message || 'Update failed');
       }
     } finally {
