@@ -24,24 +24,26 @@ export default function UniversalSearch() {
 
   // Debounced Search
   useEffect(() => {
+    if (!query || query.trim().length < 2) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+
+    setIsOpen(true);
+    setLoading(true);
+
     const timer = setTimeout(async () => {
-      if (!query || query.trim().length < 2) {
-        setResults([]);
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
       try {
-        const res = await API.get('/search', { params: { q: query } });
+        const res = await API.get('/search', { params: { q: query.trim() } });
         setResults(res.data?.data || []);
-        setIsOpen(true);
       } catch (err) {
         console.error('Search failed', err);
         setResults([]);
       } finally {
         setLoading(false);
       }
-    }, 500);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -53,6 +55,11 @@ export default function UniversalSearch() {
     // Find all unique lead IDs in search results
     const leadIds = [];
     results.forEach(group => {
+      if (group.latestStatus?.lead_id) {
+        if (!leadIds.includes(String(group.latestStatus.lead_id))) {
+          leadIds.push(String(group.latestStatus.lead_id));
+        }
+      }
       if (group.history) {
         group.history.forEach(rec => {
           if (rec.lead_id && !leadIds.includes(String(rec.lead_id))) {
@@ -64,14 +71,19 @@ export default function UniversalSearch() {
 
     // Fetch integrity for each leadId in background
     leadIds.forEach(async (leadId) => {
-      if (integrityStates[leadId]) return; // already loaded or loading
-      setIntegrityStates(prev => ({ ...prev, [leadId]: { loading: true } }));
-      try {
-        const res = await API.get(`/commission/chain/${leadId}/integrity`);
-        setIntegrityStates(prev => ({ ...prev, [leadId]: { loading: false, valid: res.data?.data?.valid } }));
-      } catch (err) {
-        setIntegrityStates(prev => ({ ...prev, [leadId]: { loading: false, valid: false } }));
-      }
+      setIntegrityStates(prev => {
+        if (prev[leadId]) return prev;
+        
+        API.get(`/commission/chain/${leadId}/integrity`)
+          .then(res => {
+            setIntegrityStates(curr => ({ ...curr, [leadId]: { loading: false, valid: res.data?.data?.valid } }));
+          })
+          .catch(() => {
+            setIntegrityStates(curr => ({ ...curr, [leadId]: { loading: false, valid: false } }));
+          });
+
+        return { ...prev, [leadId]: { loading: true } };
+      });
     });
   }, [results]);
 
@@ -99,7 +111,7 @@ export default function UniversalSearch() {
   };
 
   return (
-    <div className="relative z-[100] w-full max-w-2xl" ref={containerRef}>
+    <div className="relative z-[9999] w-full max-w-2xl" ref={containerRef}>
       {/* Search Input */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -141,16 +153,23 @@ export default function UniversalSearch() {
 
       {/* Results Dropdown */}
       {isOpen && query.trim().length >= 2 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden max-h-[80vh] overflow-y-auto ring-1 ring-black/5">
-          {results.length === 0 && !loading ? (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden max-h-[80vh] overflow-y-auto ring-1 ring-black/5 z-[9999]">
+          {loading && results.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-50 dark:bg-green-900/30 text-green-600 mb-3 animate-spin">
+                <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full"></div>
+              </div>
+              <p className="text-sm font-medium">Searching records for "{query}"...</p>
+            </div>
+          ) : results.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-3">
                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                  </svg>
               </div>
-              <p className="text-base font-medium">No customers found</p>
-              <p className="text-xs mt-1">Try a different phone number or ID</p>
+              <p className="text-base font-medium">No records found for "{query}"</p>
+              <p className="text-xs mt-1">Try searching by full phone number, customer name, or order ID</p>
             </div>
           ) : (
             <div className="p-2 space-y-3">
@@ -304,7 +323,7 @@ export default function UniversalSearch() {
                            <span>Order Chain & Commission Split</span>
                            {/* Cryptographic verification badge */}
                            {(() => {
-                             const leadId = customerGroup.history?.find(r => r.lead_id)?.lead_id;
+                             const leadId = customerGroup.latestStatus?.lead_id || customerGroup.history?.find(r => r.lead_id)?.lead_id;
                              if (!leadId) return null;
                              const status = integrityStates[String(leadId)];
                              if (!status) return null;

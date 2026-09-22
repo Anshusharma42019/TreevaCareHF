@@ -69,7 +69,7 @@ const saveToken = (t) => {
 
 const STEPS = ['Login', 'Create Order', 'Create Shipment (AWB)', 'Generate Label', 'Track Shipment', 'Get Invoice'];
 
-export const isExcludedProduct = (o) => {
+const isExcludedProduct = (o) => {
   if (!o) return false;
   const prodItems = o.order_items || o.products || [];
   const prodStr = (
@@ -83,7 +83,7 @@ export const isExcludedProduct = (o) => {
   return /migraine|piles|gastro|fissure|fistula|headache/i.test(prodStr);
 };
 
-export const getShipmaxxDept = (o) => {
+const getShipmaxxDept = (o) => {
   if (!o || isExcludedProduct(o)) return 'excluded';
   const dept = (o.department || o.lead_id?.department || '').toLowerCase();
   if (['male', 'ortho', 'skin'].includes(dept)) return dept;
@@ -1184,15 +1184,22 @@ export default function Shipmaxx() {
     }
   };
 
-  const [authEmail, setAuthEmail] = useState(() => localStorage.getItem('smx_auth_email') || 'infotriven@gmail.com');
-  const [authPassword, setAuthPassword] = useState(() => localStorage.getItem('smx_auth_pass') || 'Triven123$');
+  const [authEmail, setAuthEmail] = useState(() => {
+    const saved = localStorage.getItem('smx_auth_email');
+    return (!saved || saved === 'infotriven@gmail.com') ? 'info.treevacare@gmail.com' : saved;
+  });
+  const [authPassword, setAuthPassword] = useState(() => {
+    const savedEmail = localStorage.getItem('smx_auth_email');
+    const savedPass = localStorage.getItem('smx_auth_pass');
+    return (!savedEmail || savedEmail === 'infotriven@gmail.com' || !savedPass || savedPass === '@ctiVat3Triven') ? 'TreevaCare@' : savedPass;
+  });
   const [authApiKey, setAuthApiKey] = useState('');
   const [authBaseUrl, setAuthBaseUrl] = useState('https://appapi.losung360.com/external/v1');
 
   const [order, setOrder] = useState({
     order_number: '',
-    pickup_address_id: localStorage.getItem('smx_pickup') || '370',
-    channel_id: localStorage.getItem('smx_channel') || '595',
+    pickup_address_id: (() => { const s = localStorage.getItem('smx_pickup'); return (!s || s === '370') ? '2119' : s; })(),
+    channel_id: localStorage.getItem('smx_channel') || '3391',
     payment_method: 'cod',
     customer: { name: '', phone: '', address: '', pincode: '', city: '', state: '', email: '', landmark: '' },
     products: [{ sku: '', name: '', price: '', quantity: 1 }],
