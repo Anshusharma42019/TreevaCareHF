@@ -1005,16 +1005,16 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                         style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600 }}
                       />
                     </div>
-                    <div>
+                    <div style={{ gridColumn: 'span 2' }}>
                       <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
-                        Treating For / Problem
+                        Treating For / Problem (Point-Wise)
                       </label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={3}
                         placeholder="Problem Description"
                         value={patientInfo.treatingFor}
                         onChange={(e) => setPatientInfo({ ...patientInfo, treatingFor: e.target.value })}
-                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600 }}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600, fontFamily: 'inherit', resize: 'vertical' }}
                       />
                     </div>
                   </div>
@@ -1456,7 +1456,7 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                 </div>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px', fontSize: '11px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #f1f5f9' }}>
-                  <div style={{ flex: 1, minWidth: '240px' }}>
+                  <div style={{ flex: 1, minWidth: '240px', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
                     Treating For: <span style={{ textDecoration: 'underline', fontWeight: 600 }}>{patientInfo.treatingFor}</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#475569', whiteSpace: 'nowrap' }}>

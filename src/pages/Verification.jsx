@@ -46,13 +46,18 @@ const getDisplayKit = (record) => {
   return kit;
 };
 
-const DetailRow = ({ label, value }) =>
-  value ? (
+const DetailRow = ({ label, value }) => {
+  if (!value) return null;
+  const isMultiLine = typeof value === 'string' && (value.includes('\n') || ['problem', 'other problems', 'description', 'full address', 'address'].includes(label.toLowerCase()));
+  return (
     <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">{label}</span>
-      <span className="text-sm text-gray-800 font-medium capitalize flex-1">{value}</span>
+      <span className={`text-sm text-gray-800 font-medium flex-1 whitespace-pre-wrap leading-relaxed ${isMultiLine ? '' : 'capitalize'}`}>
+        {value}
+      </span>
     </div>
-  ) : null;
+  );
+};
 
 const SectionHead = ({ label }) => (
   <div className="flex items-center gap-2 mt-4 mb-1">

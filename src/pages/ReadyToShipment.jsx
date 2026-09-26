@@ -25,13 +25,16 @@ const PIN_COLORS = [
 const initials = (name = '') =>
   name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 
-const DetailRow = ({ label, value, color }) =>
-  value ? (
+const DetailRow = ({ label, value, color }) => {
+  if (!value) return null;
+  const isMultiLine = typeof value === 'string' && (value.includes('\n') || ['problem', 'other problems', 'description', 'full address', 'address'].includes(label.toLowerCase()));
+  return (
     <div className="flex items-start gap-2 py-2 border-b border-gray-50 last:border-0">
       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">{label}</span>
-      <span className={`text-sm capitalize flex-1 ${color ? color : 'text-gray-800 font-medium'}`}>{value}</span>
+      <span className={`text-sm flex-1 whitespace-pre-wrap leading-relaxed ${isMultiLine ? '' : 'capitalize'} ${color ? color : 'text-gray-800 font-medium'}`}>{value}</span>
     </div>
-  ) : null;
+  );
+};
 
 const SectionHead = ({ label }) => (
   <div className="flex items-center gap-2 mt-4 mb-1">

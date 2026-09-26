@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { getTasks, getDailyTasks, createTask, updateTask, deleteTask, addTaskNote, getTask, deleteCnpRecord } from '../services/task.service';
@@ -16,16 +16,19 @@ const PIN_COLORS = [
 const initials = (name = '') =>
   name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 
-const DetailRow = ({ label, value, color = "gray", icon }) =>
-  value ? (
+const DetailRow = ({ label, value, color = "gray", icon }) => {
+  if (!value) return null;
+  const isMultiLine = typeof value === 'string' && (value.includes('\n') || ['problem', 'other problems', 'description', 'full address', 'address'].includes(label.toLowerCase()));
+  return (
     <div className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
       {icon && <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-100/50">{icon}</div>}
       <div className="flex-1 min-w-0">
         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-0.5">{label}</span>
-        <span className={`text-sm font-semibold capitalize break-words ${color === 'red' ? 'text-red-600' : color === 'green' ? 'text-emerald-600' : 'text-gray-800'}`}>{value}</span>
+        <span className={`text-sm font-semibold break-words whitespace-pre-wrap leading-relaxed ${isMultiLine ? '' : 'capitalize'} ${color === 'red' ? 'text-red-600' : color === 'green' ? 'text-emerald-600' : 'text-gray-800'}`}>{value}</span>
       </div>
     </div>
-  ) : null;
+  );
+};
 
 const SectionHead = ({ label, color = "emerald" }) => (
   <div className="flex items-center gap-2 mt-6 mb-2">
@@ -38,40 +41,254 @@ const DEPARTMENTS = ['male', 'ortho', 'skin'];
 
 const DEPARTMENT_QUESTIONS = {
   male: [
-    'Erection Issue / Dysfunction (इरेक्शन में कमी / तनाव न बनना)',
-    'Premature Ejaculation / Low Timing (शीघ्रपतन / टाइमिंग बहुत कम होना)',
-    'Low Stamina & Body Weakness (स्टैमिना व शारीरिक कमजोरी)',
-    'Low Libido & Low Sex Drive (कामेच्छा / सेक्स इच्छा में कमी)',
-    'Nightfall / Dhat Syndrome (धात गिरना / नाइटफॉल की समस्या)',
-    'Prostate & Burning Urine Issue (प्रोस्टेट व पेशाब में जलन)',
-    'Low Sperm Count & Motility (शुक्राणु की कमी / स्पर्म काउंट)',
-    'Testosterone & Energy Deficiency (टेस्टोस्टेरोन व ऊर्जा की कमी)',
-    'Sexual Anxiety & Stress (मानसिक तनाव / सेक्सुअल घबराहट)',
-    'General Male Health Consultation (पुरुषों की सामान्य परामर्श)'
+    {
+      title: 'Erection Issue / Dysfunction (इरेक्शन में कमी / तनाव न बनना)',
+      symptoms: [
+        'Partial / Soft Erection (हल्का / ढीला तनाव)',
+        'Loss of Hardness mid-way (बीच में तनाव खत्म होना)',
+        'No Morning Erection (सुबह तनाव बिल्कुल न आना)',
+        'Complete ED / No Hardness (बिल्कुल इरेक्शन न होना)',
+        'Penile shrinkage feeling (अंग का छोटापन/सिकुड़न महसूस होना)',
+        'Coldness in private part (अंग में ठंडापन रहना)',
+        'Veins weakness & Dilation (नसों में ढीलापन व कमजोरी)'
+      ]
+    },
+    {
+      title: 'Premature Ejaculation / Low Timing (शीघ्रपतन / टाइमिंग बहुत कम होना)',
+      symptoms: [
+        'Timing under 1 minute (1 मिनट से कम टाइमिंग)',
+        'Discharge before penetration (प्रवेश से पहले ही डिस्चार्ज)',
+        'High Penile Sensitivity (अत्यधिक संवेदनशीलता)',
+        'Lack of ejaculation control (स्खलन पर नियंत्रण न होना)',
+        'Fast discharge on 2nd attempt (दूसरे प्रयास में भी जल्दी डिस्चार्ज)',
+        'Inability to satisfy partner (पार्टनर की असंतुष्टि)'
+      ]
+    },
+    {
+      title: 'Low Stamina & Body Weakness (स्टैमिना व शारीरिक कमजोरी)',
+      symptoms: [
+        'Extreme fatigue after sex (सेक्स के बाद अत्यधिक थकान)',
+        'Legs & lower back ache (पैरों व कमर में दर्द / कमजोरी)',
+        'Low energy & lethargy (ऊर्जा की कमी व सुस्ती)',
+        'Breathlessness during intercourse (सांस फूलना)',
+        'Dizziness after climax (डिस्चार्ज के बाद चक्कर आना)',
+        'Whole body muscle soreness (शरीर की मांसपेशियों में दर्द)'
+      ]
+    },
+    {
+      title: 'Low Libido & Low Sex Drive (कामेच्छा / सेक्स इच्छा में कमी)',
+      symptoms: [
+        'No interest in sex (सेक्स में बिल्कुल रुचि न होना)',
+        'Performance anxiety & fear (घबराहट व असफलता का डर)',
+        'Infrequent sexual thoughts (कामुक विचारों की कमी)',
+        'Avoiding partner intimacy (पार्टनर से दूरी बनाना)',
+        'Stress killing sex drive (कामकाज के तनाव से इच्छा खत्म)'
+      ]
+    },
+    {
+      title: 'Nightfall / Dhat Syndrome (धात गिरना / नाइटफॉल की समस्या)',
+      symptoms: [
+        'Frequent Nightfall 3+ times/week (हफ्ते में 3-4 बार नाइटफॉल)',
+        'Semen leakage in urine / stool (पेशाब के साथ धात जाना)',
+        'Dizziness & weakness after nightfall (चक्कर व कमजोरी)',
+        'Semen drop during thoughts (गंदे विचारों से धात गिरना)',
+        'Burning in urine after nightfall (पेशाब में जलन)',
+        'Calf muscle pain (पिंडलियों में तेज दर्द)'
+      ]
+    },
+    {
+      title: 'Prostate & Burning Urine Issue (प्रोस्टेट व पेशाब में जलन)',
+      symptoms: [
+        'Burning sensation during urination (पेशाब में तेज जलन)',
+        'Frequent urge at night (रात में बार-बार पेशाब आना)',
+        'Weak urine stream (पेशाब की धार कम होना / रुक-रुक कर आना)',
+        'Dribbling after urination (पेशाब के बाद बूंद-बूंद टपकना)',
+        'Pelvic & Groin area pain (पेडू व पेड़ू के निचले हिस्से में दर्द)'
+      ]
+    },
+    {
+      title: 'Low Sperm Count & Motility (शुक्राणु की कमी / स्पर्म काउंट)',
+      symptoms: [
+        'Thin / Watery semen (शुक्राणु पतला होना / पानी जैसा)',
+        'Low sperm count issue (स्पर्म काउंट कम होना)',
+        'Low motility / Active count (शुक्राणु की गतिशीलता कम होना)',
+        'Low semen volume (वीर्य की मात्रा कम बनना)',
+        'Yellowish / Clumped semen (पीलापन या गांठदार वीर्य)'
+      ]
+    },
+    {
+      title: 'Masturbation Side Effects & Nerve Weakness (हस्तमैथुन के दुष्परिणाम व नस कमजोरी)',
+      symptoms: [
+        'Weakness due to past habit (पुराने हस्तमैथुन से आई कमजोरी)',
+        'Penile nerve damage / Numbness (नसों का बेजान/सुन्न होना)',
+        'Curvature or bending (अंग का टेढ़ापन महसूस होना)',
+        'Root weakness (जड़ से पतला या कमजोर होना)'
+      ]
+    },
+    {
+      title: 'Testosterone & Energy Deficiency (टेस्टोस्टेरोन व ऊर्जा की कमी)',
+      symptoms: [
+        'Mood swings & irritability (चिड़चिड़ापन व मूड बदलना)',
+        'Loss of muscle mass & strength (मांसपेशियों में कमजोरी)',
+        'Low T-levels confirmed in test (टेस्टोस्टेरोन का स्तर कम होना)',
+        'Weight gain & belly fat (पेट की चर्बी व वजन बढ़ना)'
+      ]
+    },
+    {
+      title: 'Sexual Anxiety & Stress (मानसिक तनाव / सेक्सुअल घबराहट)',
+      symptoms: [
+        'Fear of performance failure (परफॉर्मेंस का मानसिक डर)',
+        'Stress & depression affecting sex drive (तनाव से सेक्स लाइफ प्रभावित)',
+        'Heart racing before intercourse (धड़कन तेज होना / घबराहट)',
+        'Lack of confidence during intimacy (आत्मविश्वास की कमी)'
+      ]
+    },
+    {
+      title: 'General Male Health Consultation (पुरुषों की सामान्य परामर्श)',
+      symptoms: [
+        'General sexual wellness checkup (सामान्य यौन स्वास्थ्य परामर्श)',
+        'Diet & Lifestyle guidance (खान-पान व दिनचर्या सुधार)',
+        'Pre-marital consultation (विवाह पूर्व परामर्श)'
+      ]
+    }
   ],
   skin: [
-    'Acne, Pimples & Breakouts (चेहरे पर मुंहासे / पिंपल्स)',
-    'Pigmentation, Melasma & Dark Spots (झाइयां / पिगमेंटेशन / काले धब्बे)',
-    'Fungal Infection, Ringworm & Itching (दाद / खाज-खुजली / फंगल इंफेक्शन)',
-    'Eczema, Psoriasis & Scaly Skin (एक्जिमा / सोरायसिस / त्वचा छिलना)',
-    'Dark Circles & Dull Skin (आंखों के नीचे काले घेरे / बेजान त्वचा)',
-    'Skin Rash, Redness & Allergies (त्वचा में रेडनेस / दाने / एलर्जी)',
-    'Dry & Flaky Skin (सूखी व बेजान त्वचा)',
-    'Hair Loss, Dandruff & Scalp Issues (बाल झड़ना / डैंड्रफ / सिर की खुजली)',
-    'Skin Glowing & Anti-Aging Care (त्वचा की चमक व एंटी-एजिंग)',
-    'General Skin Consultation (त्वचा संबंधी सामान्य परामर्श)'
+    {
+      title: 'Acne, Pimples & Breakouts (चेहरे पर मुंहासे / पिंपल्स)',
+      symptoms: [
+        'Painful red cystic acne (दर्दनाक लाल पिंपल्स)',
+        'Pus-filled breakouts (मवाद वाले मुंहासे)',
+        'Pimple spots & scars (पिंपल्स के बाद काले दाग/गड्ढे)',
+        'Oily skin acne flare-ups (ऑयली स्किन पर मुंहासे)',
+        'Blackheads & Whiteheads (ब्लैकहेड्स व व्हाइटहेड्स)',
+        'Hormonal chin & jawline acne (हार्मोनल पिंपल्स - ठुड्डी पर)'
+      ]
+    },
+    {
+      title: 'Pigmentation, Melasma & Dark Spots (झाइयां / पिगमेंटेशन / काले धब्बे)',
+      symptoms: [
+        'Melasma / Chhaiya on cheeks & nose (गालों व नाक पर झाइयां)',
+        'Sun tan & uneven skin tone (धूप से कालापन / असमान रंगत)',
+        'Dark spots post acne (पुराने दाग-धब्बे)',
+        'Hyperpigmentation around mouth (मुंह के चारों ओर कालापन)',
+        'Freckles & Age spots (झुर्रियां व तिल जैसे काले धब्बे)'
+      ]
+    },
+    {
+      title: 'Fungal Infection, Ringworm & Itching (दाद / खाज-खुजली / फंगल इंफेक्शन)',
+      symptoms: [
+        'Ring-shaped red itching spots (गोल दाद / लाल चकत्ते)',
+        'Severe itching in body folds (जांघों/गुप्तांगों में तेज खुजली)',
+        'Recurring infection in sweat areas (पसीने से बार-बार इंफेक्शन)',
+        'Scaling & burning skin (त्वचा का छिलना व जलन)',
+        'Redness & spreading rash (फैलने वाला दाद/इंफेक्शन)'
+      ]
+    },
+    {
+      title: 'Eczema, Psoriasis & Scaly Skin (एक्जिमा / सोरायसिस / त्वचा छिलना)',
+      symptoms: [
+        'Dry silvery scaly patches (सूखे सफेद पपड़ीदार चकत्ते)',
+        'Skin cracking & bleeding (त्वचा का फटना व खून आना)',
+        'Severe dryness & redness (अत्यधिक सूखापन व लालिमा)',
+        'Intense itching & skin thickening (मोटी चमड़ी व भयंकर खुजली)'
+      ]
+    },
+    {
+      title: 'Dark Circles & Dull Skin (आंखों के नीचे काले घेरे / बेजान त्वचा)',
+      symptoms: [
+        'Deep dark circles under eyes (गहरे काले घेरे)',
+        'Sunken eyes & tiredness (आंखों में थकान व गड्ढे)',
+        'Dull, lifeless face complexion (चेहरे का ग्लो खत्म होना)',
+        'Under-eye puffiness (आंखों की सूजन/सूजे घेरे)'
+      ]
+    },
+    {
+      title: 'Hair Loss, Dandruff & Scalp Issues (बाल झड़ना / डैंड्रफ / सिर की खुजली)',
+      symptoms: [
+        'Excessive hair fall in bath/comb (नहाते/कंघा करते वक्त बाल झड़ना)',
+        'Receding hairline / Thinning (सिर के बाल पतले होना)',
+        'Sticky / Dry itch dandruff (रूखा या चिपचिपा डैंड्रफ)',
+        'Scalp pimples & itching (सिर की त्वचा में खुजली व दाने)',
+        'Premature hair greying (कम उम्र में बाल सफेद होना)',
+        'Patchy baldness / Alopecia (सिर में चकत्ते में बाल उड़ना)'
+      ]
+    },
+    {
+      title: 'Skin Allergy, Urticaria & Rash (एलर्जी / पित्ती उछलना / दाने)',
+      symptoms: [
+        'Sudden red hives / Urticaria (अचानक पित्ती उछलना/सूजन)',
+        'Food/dust allergy symptoms (खान-पान या धूल से एलर्जी)',
+        'Skin rash on weather change (मौसम बदलते ही दाने निकलना)'
+      ]
+    }
   ],
   ortho: [
-    'Knee Joint Pain & Crepitus (घुटनों का दर्द व कटकट की आवाज)',
-    'Lower Back & Spine Pain (कमर दर्द / रीढ़ की हड्डी का दर्द)',
-    'Cervical, Neck & Shoulder Stiffness (गर्दन व कंधे का दर्द / सर्वाइकल)',
-    'Arthritis, Gout & Swollen Joints (गठिया बाई / जोड़ों में सूजन)',
-    'Slip Disc, Sciatica & Nerve Compression (स्लिप डिस्क / साइटिका / नस दबना)',
-    'Heel & Foot Sole Pain (एड़ी व तलवों का दर्द)',
-    'Joint Stiffness in Morning (सुबह जोड़ों में अकड़न)',
-    'Bone Density & Calcium Weakness (हड्डियों की कमजोरी / कैल्शियम कमी)',
-    'Muscle Pain & Cramps (मांसपेशियों में खिंचाव व ऐंठन)',
-    'General Ortho Consultation (हड्डी व जोड़ संबंधी सामान्य परामर्श)'
+    {
+      title: 'Knee Joint Pain & Crepitus (घुटनों का दर्द व कटकट की आवाज)',
+      symptoms: [
+        'Popping sound / Crepitus on bending (मुड़ने पर कटकट की आवाज)',
+        'Pain while walking & stairs climbing (चलने व सीढ़ियां चढ़ने में दर्द)',
+        'Swelling & warmth around knee (घुटने में सूजन व जकड़न)',
+        'Inability to sit on floor (जमीन पर आलथी-पालथी न मार पाना)',
+        'Knee gap / Osteoarthritis (घुटने की ग्रीस/गैप कम होना)',
+        'Knee buckling / Instability (पैर में लचक आना/संतुलन बिगड़ना)'
+      ]
+    },
+    {
+      title: 'Lower Back & Spine Pain (कमर दर्द / रीढ़ की हड्डी का दर्द)',
+      symptoms: [
+        'Pain radiating down to legs (कमर से पैरों तक दर्द जाना)',
+        'Stiffness on waking up (सुबह उठते ही कमर में अकड़न)',
+        'Pain on prolonged sitting/standing (ज्यादा देर बैठने पर दर्द)',
+        'Sharp catching pain on bending (झुकने पर रीढ़ में तेज चसक)',
+        'Lower back muscle spasm (कमर की मांसपेशियों में खिंचाव)'
+      ]
+    },
+    {
+      title: 'Cervical, Neck & Shoulder Stiffness (गर्दन व कंधे का दर्द / सर्वाइकल)',
+      symptoms: [
+        'Neck stiffness & inability to turn (गर्दन घुमाने में तेज दर्द)',
+        'Dizziness / Vertigo on bending (झुकने पर चक्कर आना)',
+        'Numbness in fingers & arms (हाथों व उंगलियों में सुन्नपन)',
+        'Frozen shoulder / Arm restriction (कंधा जाम होना/ऊपर न उठना)',
+        'Headache originating from neck (गर्दन से उठने वाला सिरदर्द)'
+      ]
+    },
+    {
+      title: 'Arthritis, Gout & Swollen Joints (गठिया बाई / जोड़ों में सूजन)',
+      symptoms: [
+        'Uric acid elevated / Small joints pain (यूरिक एसिड बढ़ना / उंगलियों में दर्द)',
+        'Morning joint stiffness >30 min (सुबह जोड़ों में 30 मिनट से ज्यादा जकड़न)',
+        'Redness & swelling in toe/fingers (पैरों के अंगूठे में सूजन)',
+        'Rheumatoid arthritis deformity (गठिया से जोड़ों में मुड़ाव/दर्द)'
+      ]
+    },
+    {
+      title: 'Slip Disc, Sciatica & Nerve Compression (स्लिप डिस्क / साइटिका / नस दबना)',
+      symptoms: [
+        'Shooting electric shock pain in leg (साइटिका - पैर में बिजली जैसा दर्द)',
+        'Foot numbness & tingling sensation (पैर में झनझनाहट व सुन्नपन)',
+        'Disc bulge L4-L5 / S1 diagnosed (L4-L5 नस दबने की समस्या)',
+        'Walking limitation due to nerve pain (नस दर्द के कारण ज्यादा न चल पाना)'
+      ]
+    },
+    {
+      title: 'Heel & Foot Sole Pain (एड़ी व तलवों का दर्द)',
+      symptoms: [
+        'Severe morning first-step heel pain (सुबह पहला कदम रखते ही एड़ी में तेज दर्द)',
+        'Burning in foot soles (तलवों में जलन व भारीपन)',
+        'Plantar Fasciitis inflammation (एड़ी के नीचे सूजन)',
+        'Ankle joint stiffness (टखने में जकड़न व दर्द)'
+      ]
+    },
+    {
+      title: 'Bone Density & Calcium Deficiency (हड्डियों की कमजोरी / कैल्शियम कमी)',
+      symptoms: [
+        'General body bone ache (पूरे शरीर की हड्डियों में मीठा दर्द)',
+        'Vitamin D / Calcium deficiency (विटामिन डी व कैल्शियम की कमी)',
+        'Early fatigue & cracking joints (जोड़ों में कट-कट व जल्दी थकान)'
+      ]
+    }
   ]
 };
 
@@ -88,6 +305,139 @@ const HIDDEN_TASK_LEAD_STATUSES = new Set(['closed_lost', 'on_hold']);
 const EMPTY = { title: '', description: '', problem: '', lead: '', assignedTo: '', dueDate: '', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', gender: '', occupation: '', maritalStatus: '', otherProblems: '', problemDuration: '', price: '', phone: '', department: '' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition";
+
+function QuestionDropdown({ department, questions, selectedProblem, onSelect }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const deptQuestions = questions[department] || [];
+  const problemText = selectedProblem || '';
+
+  // Helper to check if a symptom or category title is already in problemText
+  const isSelected = (text) => {
+    if (!problemText || !text) return false;
+    const cleanStr = text.replace(/^[•\-\*\d\.\s]+/, '').trim();
+    return problemText.split('\n').some(line => {
+      const cleanL = line.replace(/^[•\-\*\d\.\s]+/, '').trim();
+      return cleanL === cleanStr;
+    });
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between border border-emerald-200 rounded-xl px-4 py-2.5 text-sm bg-emerald-50/40 text-emerald-900 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400 transition shadow-sm text-left cursor-pointer"
+      >
+        <span className="truncate">-- Choose Question or Symptom --</span>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {isOpen && (
+            <span className="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-md uppercase tracking-wider">
+              Open
+            </span>
+          )}
+          <svg
+            className={`w-4 h-4 text-emerald-600 transition-transform duration-200 ${
+              isOpen ? 'rotate-180' : ''
+            }`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-[200] bg-white border border-emerald-200 rounded-xl shadow-2xl max-h-72 overflow-y-auto custom-scrollbar p-2 animate-fadeIn space-y-2">
+          <div className="flex items-center justify-between px-2 pt-1 pb-1 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur-sm z-10">
+            <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-widest">
+              Click symptoms to add / remove (Menu stays open)
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="text-[10px] font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 rounded-lg transition cursor-pointer"
+            >
+              ✓ Done
+            </button>
+          </div>
+
+          {deptQuestions.map((item, qIdx) => {
+            const isCatTitleSelected = isSelected(item.title);
+
+            return (
+              <div key={qIdx} className="rounded-xl border border-gray-100 bg-gray-50/50 p-1.5 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => onSelect(item.title)}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                    isCatTitleSelected
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50/80 text-emerald-900 hover:bg-emerald-100'
+                  }`}
+                >
+                  <span className="truncate">📌 {qIdx + 1}. {item.title}</span>
+                  <span className="text-[10px] font-black shrink-0 ml-1">
+                    {isCatTitleSelected ? '✓ Selected' : '+ Add Header'}
+                  </span>
+                </button>
+
+                <div className="space-y-1 pl-1">
+                  {item.symptoms.map((s, sIdx) => {
+                    const isSymSelected = isSelected(s);
+                    return (
+                      <button
+                        key={sIdx}
+                        type="button"
+                        onClick={() => onSelect(s)}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition flex items-center justify-between cursor-pointer ${
+                          isSymSelected
+                            ? 'bg-emerald-600 text-white font-semibold shadow-xs'
+                            : 'bg-white text-gray-700 border border-gray-200/80 hover:border-emerald-300 hover:bg-emerald-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <span
+                            className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${
+                              isSymSelected
+                                ? 'bg-white text-emerald-700'
+                                : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >
+                            {isSymSelected ? '✓' : '•'}
+                          </span>
+                          <span className="truncate">{s}</span>
+                        </div>
+                        <span className="text-[9px] font-bold shrink-0 ml-1">
+                          {isSymSelected ? '✓ Added' : '+ Add'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => {
+              onSelect('__OTHER__');
+            }}
+            className="w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 transition flex items-center gap-1.5 border border-amber-200 cursor-pointer"
+          >
+            <span>✍️</span>
+            <span>Other / Custom Question (अन्य समस्या - स्वयं टाइप करें)</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Tasks() {
   const { user } = useAuth();
@@ -947,27 +1297,30 @@ export default function Tasks() {
 
             {form.department && DEPARTMENT_QUESTIONS[form.department] && (
               <div>
-                <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center justify-between">
+                <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center justify-between mb-1">
                   <span className="flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M12 18h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Select Department Question ({form.department.toUpperCase()})
+                    Select Question / Symptom ({form.department.toUpperCase()})
                   </span>
                 </label>
-                <select
-                  className={`${inputCls} mt-1 bg-emerald-50/50 border-emerald-200 text-emerald-900 font-medium`}
-                  value=""
-                  onChange={(e) => {
-                    const selectedQ = e.target.value;
-                    if (!selectedQ) return;
-                    if (selectedQ === '__OTHER__') {
-                      const otherLabel = 'Other: ';
-                      let updated = form.problem || '';
-                      if (!updated.includes('Other:')) {
-                        updated = updated ? `${updated}, ${otherLabel}` : otherLabel;
-                      }
-                      setForm({ ...form, problem: updated });
+
+                <QuestionDropdown
+                  department={form.department}
+                  questions={DEPARTMENT_QUESTIONS}
+                  selectedProblem={form.problem}
+                  onSelect={(val) => {
+                    if (!val) return;
+                    if (val === '__OTHER__') {
+                      const otherLabel = '• Other: ';
+                      setForm(prev => {
+                        let currentText = prev.problem ? prev.problem.trim() : '';
+                        if (!currentText.includes('Other:')) {
+                          currentText = currentText ? `${currentText}\n${otherLabel}` : otherLabel;
+                        }
+                        return { ...prev, problem: currentText };
+                      });
                       setTimeout(() => {
                         const el = document.getElementById('problem-textarea');
                         if (el) {
@@ -977,21 +1330,76 @@ export default function Tasks() {
                       }, 50);
                       return;
                     }
-                    const exists = form.problem?.includes(selectedQ);
-                    if (!exists) {
-                      const updated = form.problem ? `${form.problem}, ${selectedQ}` : selectedQ;
-                      setForm({ ...form, problem: updated });
-                    }
+
+                    const deptData = DEPARTMENT_QUESTIONS[form.department] || [];
+                    const targetStr = val.trim();
+                    const cleanLine = (l) => l.replace(/^[•\-\*\d\.\s]+/, '').trim();
+
+                    const mainCatIdx = deptData.findIndex(item => item.title.trim() === targetStr);
+
+                    setForm(prev => {
+                      let currentText = prev.problem ? prev.problem.trim() : '';
+                      let lines = currentText ? currentText.split('\n') : [];
+
+                      if (mainCatIdx !== -1) {
+                        const catTitle = deptData[mainCatIdx].title.trim();
+                        const catHeaderStr = `${mainCatIdx + 1}. ${catTitle}`;
+                        const existingIdx = lines.findIndex(l => cleanLine(l) === catTitle);
+
+                        if (existingIdx !== -1) {
+                          lines.splice(existingIdx, 1);
+                        } else {
+                          if (lines.length > 0 && lines[lines.length - 1].trim() !== '') {
+                            lines.push('');
+                          }
+                          lines.push(catHeaderStr);
+                        }
+                        return { ...prev, problem: lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() };
+                      }
+
+                      const parentCatIdx = deptData.findIndex(item => item.symptoms && item.symptoms.some(s => s.trim() === targetStr));
+                      const symFormatted = `   • ${targetStr}`;
+                      const existingSymIdx = lines.findIndex(l => cleanLine(l) === targetStr);
+
+                      if (existingSymIdx !== -1) {
+                        lines.splice(existingSymIdx, 1);
+                        return { ...prev, problem: lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() };
+                      }
+
+                      if (parentCatIdx !== -1) {
+                        const parentCat = deptData[parentCatIdx];
+                        const parentTitle = parentCat.title.trim();
+                        const parentHeaderStr = `${parentCatIdx + 1}. ${parentTitle}`;
+                        let parentHeaderIdx = lines.findIndex(l => cleanLine(l) === parentTitle);
+
+                        if (parentHeaderIdx === -1) {
+                          if (lines.length > 0 && lines[lines.length - 1].trim() !== '') {
+                            lines.push('');
+                          }
+                          lines.push(parentHeaderStr);
+                          lines.push(symFormatted);
+                        } else {
+                          let insertIdx = parentHeaderIdx;
+                          for (let i = parentHeaderIdx + 1; i < lines.length; i++) {
+                            const lTrim = lines[i].trim();
+                            if (lTrim.startsWith('•') || lTrim.startsWith('   •')) {
+                              insertIdx = i;
+                            } else if (lTrim === '') {
+                              continue;
+                            } else {
+                              break;
+                            }
+                          }
+                          lines.splice(insertIdx + 1, 0, symFormatted);
+                        }
+                      } else {
+                        lines.push(`• ${targetStr}`);
+                      }
+
+                      return { ...prev, problem: lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() };
+                    });
                   }}
-                >
-                  <option value="">-- Choose {form.department.toUpperCase()} Question --</option>
-                  {DEPARTMENT_QUESTIONS[form.department].map((q, idx) => (
-                    <option key={idx} value={q}>
-                      {q}
-                    </option>
-                  ))}
-                  <option value="__OTHER__">✍️ Other / Custom Question (अन्य समस्या - स्वयं टाइप करें)</option>
-                </select>
+                />
               </div>
             )}
 
@@ -1000,22 +1408,22 @@ export default function Tasks() {
 
             <div>
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem / Questions</label>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem / Questions (Point-Wise)</label>
                 {form.problem && (
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, problem: '' })}
                     className="text-[10px] font-bold text-red-500 hover:underline uppercase"
                   >
-                    Clear & Type Custom
+                    Clear All Points
                   </button>
                 )}
               </div>
               <textarea
                 id="problem-textarea"
-                rows={2}
-                className={`${inputCls} mt-1`}
-                placeholder="Select from dropdown above or type custom question/problem here..."
+                rows={3}
+                className={`${inputCls} mt-1 font-medium leading-relaxed`}
+                placeholder="Selected symptoms will appear here point-wise (• Symptom 1)... or type custom points here"
                 value={form.problem}
                 onChange={(e) => setForm({ ...form, problem: e.target.value })}
               />
