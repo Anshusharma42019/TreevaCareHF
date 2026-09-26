@@ -85,7 +85,7 @@ const STATUSES = [
 const HIDDEN_TASK_STATUSES = new Set(['cnp', 'verification', 'interested', 'cancel_call', 'cancelled', 'on_hold', 'closed_lost']);
 const HIDDEN_TASK_LEAD_STATUSES = new Set(['closed_lost', 'on_hold']);
 
-const EMPTY = { title: '', description: '', problem: '', lead: '', assignedTo: '', dueDate: '', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', phone: '', department: '' };
+const EMPTY = { title: '', description: '', problem: '', lead: '', assignedTo: '', dueDate: '', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', gender: '', occupation: '', maritalStatus: '', otherProblems: '', problemDuration: '', price: '', phone: '', department: '' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition";
 
@@ -191,6 +191,9 @@ export default function Tasks() {
         age: ld.age || '',
         weight: ld.weight || '',
         height: ld.height || '',
+        gender: ld.gender || '',
+        occupation: ld.occupation || '',
+        maritalStatus: ld.maritalStatus || '',
         cityVillageType: ld.cityVillageType || 'city',
         cityVillage: ld.cityVillage || '',
         houseNo: ld.houseNo || '',
@@ -227,6 +230,9 @@ export default function Tasks() {
       landmark: task.landmark || '', pincode: task.pincode || '', state: task.state || '',
       status: task.status || 'pending',
       age: task.age || '', weight: task.weight || '', height: task.height || '',
+      gender: task.gender || task.lead?.gender || '',
+      occupation: task.occupation || task.lead?.occupation || '',
+      maritalStatus: task.maritalStatus || task.lead?.maritalStatus || '',
       otherProblems: task.otherProblems || '', problemDuration: task.problemDuration || '', price: task.price || '', phone, department: task.department || '' });
     setError(''); setModal('edit');
   };
@@ -667,6 +673,9 @@ export default function Tasks() {
 
             <SectionHead label="Problem & Details" />
             <div className="grid grid-cols-1 gap-1">
+              <DetailRow label="Gender" value={selected.gender || selected.lead?.gender} />
+              <DetailRow label="Marital Status" value={selected.maritalStatus || selected.lead?.maritalStatus} />
+              <DetailRow label="Occupation" value={selected.occupation || selected.lead?.occupation} />
               <DetailRow label="Problem" value={selected.problem} />
               <DetailRow label="Duration" value={selected.problemDuration} />
               <DetailRow label="Vitals" value={selected.age || selected.weight || selected.height ? `${selected.age ? selected.age+'y ' : ''}${selected.weight ? selected.weight+'kg ' : ''}${selected.height ? selected.height+'ft' : ''}` : null} />
@@ -805,6 +814,9 @@ export default function Tasks() {
                  <DetailRow label="Address" value={[selected.houseNo, selected.cityVillage, selected.district, selected.pincode].filter(Boolean).join(', ')} />
                  
                  <SectionHead label="Problem & Details" />
+                  <DetailRow label="Gender" value={selected.gender || selected.lead?.gender} />
+                  <DetailRow label="Marital Status" value={selected.maritalStatus || selected.lead?.maritalStatus} />
+                  <DetailRow label="Occupation" value={selected.occupation || selected.lead?.occupation} />
                  <DetailRow label="Problem" value={selected.problem} />
                  <DetailRow label="Duration" value={selected.problemDuration} />
                  <DetailRow label="Vitals" value={selected.age || selected.weight || selected.height ? `${selected.age ? selected.age+'y ' : ''}${selected.weight ? selected.weight+'kg ' : ''}${selected.height ? selected.height+'ft' : ''}` : null} />
@@ -1015,6 +1027,33 @@ export default function Tasks() {
                 <input type="number" placeholder="Age" className={inputCls} value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
                 <input type="number" placeholder="Kg" className={inputCls} value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} />
                 <input type="number" step="0.1" placeholder="Ft" className={inputCls} value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Gender</label>
+                <select className={`${inputCls} mt-1`} value={form.gender || ''} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male (पुरुष)</option>
+                  <option value="Female">Female (महिला)</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Marital Status</label>
+                <select className={`${inputCls} mt-1`} value={form.maritalStatus || ''} onChange={(e) => setForm({ ...form, maritalStatus: e.target.value })}>
+                  <option value="">Select Status</option>
+                  <option value="Single">Single / Unmarried (अविवाहित)</option>
+                  <option value="Married">Married (विवाहित)</option>
+                  <option value="Divorced">Divorced (तलाकशुदा)</option>
+                  <option value="Widowed">Widowed (विधवा/विधुर)</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Occupation</label>
+                <input className={`${inputCls} mt-1`} placeholder="e.g. Job, Business, Farmer" value={form.occupation || ''} onChange={(e) => setForm({ ...form, occupation: e.target.value })} />
               </div>
             </div>
 

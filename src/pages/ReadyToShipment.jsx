@@ -489,6 +489,9 @@ export default function ReadyToShipment() {
             <DetailRow label="Description" value={selected.description} />
 
             <SectionHead label="Health Info" />
+            <DetailRow label="Gender" value={selected.gender || selected.lead?.gender} />
+            <DetailRow label="Marital Status" value={selected.maritalStatus || selected.lead?.maritalStatus} />
+            <DetailRow label="Occupation" value={selected.occupation || selected.lead?.occupation} />
             <DetailRow label="Problem" value={selected.problem} />
             <DetailRow label="Duration" value={selected.problemDuration} />
             <DetailRow label="Age" value={selected.age ? `${selected.age} yrs` : null} />
@@ -512,28 +515,6 @@ export default function ReadyToShipment() {
 
           {/* Panel footer */}
           <div className="px-5 py-4 border-t border-gray-50 shrink-0 flex gap-2">
-            {['admin', 'manager', 'doctor'].includes(user?.role) && (
-              <button
-                onClick={() => {
-                  setRxRecord({
-                    patientName: selected.lead?.name || selected.title,
-                    mobile: selected.lead?.phone || selected.pincode,
-                    problem: selected.problem || selected.description || selected.department,
-                    department: selected.department || selected.lead?.department,
-                    amount: selected.price,
-                    pid: selected._id,
-                    verifiedBy: selected.verifiedBy?.name || selected.verified_by?.name || selected.assignedTo?.name,
-                    doctorName: selected.doctorName || selected.createdBy?.name,
-                  });
-                  setPrescriptionOpen(true);
-                }}
-                className="px-3 py-3 rounded-xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 transition flex items-center gap-1 shrink-0"
-                title="Generate Prescription"
-              >
-                <span>Rx</span>
-                <span>Prescription</span>
-              </button>
-            )}
             <button
               onClick={() => handleDelete(selected)}
               className="px-3 py-3 rounded-xl text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition shrink-0">
@@ -588,6 +569,9 @@ export default function ReadyToShipment() {
               <DetailRow label="Description" value={selected.description} />
               
               <SectionHead label="Health Info" />
+              <DetailRow label="Gender" value={selected.gender || selected.lead?.gender} />
+              <DetailRow label="Marital Status" value={selected.maritalStatus || selected.lead?.maritalStatus} />
+              <DetailRow label="Occupation" value={selected.occupation || selected.lead?.occupation} />
               <DetailRow label="Problem" value={selected.problem} />
               <DetailRow label="Duration" value={selected.problemDuration} />
               <DetailRow label="Age" value={selected.age ? `${selected.age} yrs` : null} />

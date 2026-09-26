@@ -868,6 +868,9 @@ function OrdersSection() {
             problem: ord.problem || ord.lead_id?.problem,
             verifiedBy: ord.verified_by?.name || ord.verifiedBy?.name,
             doctorName: ord.doctorName || ord.created_by?.name || ord.task_created_by?.name,
+            gender: ord.gender || ord.lead_id?.gender || ord.lead?.gender,
+            maritalStatus: ord.maritalStatus || ord.lead_id?.maritalStatus || ord.lead?.maritalStatus,
+            occupation: ord.occupation || ord.lead_id?.occupation || ord.lead?.occupation,
           });
           setRxModalOpen(true);
         }}

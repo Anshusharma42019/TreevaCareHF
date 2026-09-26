@@ -60,8 +60,16 @@ export default function DoctorDashboard() {
     }
   });
 
-  const userDepts = user?.departments?.length ? user.departments : (user?.department ? [user.department] : []);
-  const defaultDept = userDepts.length === 1 ? userDepts[0].toLowerCase() : 'all';
+  const userDepts = (
+    user?.departments?.length
+      ? user.departments
+      : user?.department
+      ? [user.department]
+      : []
+  ).map((d) => String(d).toLowerCase());
+
+  const isFullAccessUser = ['admin', 'manager'].includes(user?.role);
+  const defaultDept = !isFullAccessUser && userDepts.length > 0 ? userDepts[0] : 'all';
   const [selectedDept, setSelectedDept] = useState(defaultDept);
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -189,18 +197,74 @@ export default function DoctorDashboard() {
   });
 
   const matchesDept = (item, targetDept) => {
+    // 1. Strict Department Access Control for Non-Admin / Non-Manager Users
+    if (!isFullAccessUser) {
+      if (userDepts.length === 0) {
+        // Doctor has NO department permissions granted by Admin!
+        return false;
+      }
+      const directDept = (
+        item.department ||
+        item.dept ||
+        item.raw?.department ||
+        item.lead?.department ||
+        item.task?.department ||
+        item.lead_id?.department ||
+        ''
+      ).toLowerCase().trim();
+
+      const itemText = (
+        item.problem ||
+        item.purpose ||
+        item.disease ||
+        item.condition ||
+        item.title ||
+        item.description ||
+        item.raw?.problem ||
+        item.lead?.problem ||
+        item.task?.problem ||
+        ''
+      ).toLowerCase();
+
+      let detectedDept = directDept;
+      if (!detectedDept || !['male', 'skin', 'ortho'].includes(detectedDept)) {
+        if (itemText.includes('ortho') || itemText.includes('joint') || itemText.includes('spine') || itemText.includes('knee') || itemText.includes('bone') || itemText.includes('back pain') || itemText.includes('arthritis')) detectedDept = 'ortho';
+        else if (itemText.includes('skin') || itemText.includes('acne') || itemText.includes('derma') || itemText.includes('eczema') || itemText.includes('psoriasis') || itemText.includes('fungal') || itemText.includes('itching')) detectedDept = 'skin';
+        else if (itemText.includes('male') || itemText.includes('sperm') || itemText.includes('erect') || itemText.includes('timing') || itemText.includes('semen') || itemText.includes('libido') || itemText.includes('testosterone') || itemText.includes('sexual') || itemText.includes('ejaculation')) detectedDept = 'male';
+        else detectedDept = 'male'; // Default fallback department for ambiguous medical items
+      }
+
+      // If this item belongs to a department that this doctor is NOT assigned to, reject it!
+      if (!userDepts.includes(detectedDept)) {
+        return false;
+      }
+    }
+
+    // 2. Department Tab Filtering
     if (!targetDept || targetDept === 'all') return true;
-    const itemDept = (item.department || item.dept || item.problem || item.purpose || item.disease || item.condition || '').toLowerCase();
+    const directDept = (
+      item.department ||
+      item.dept ||
+      item.raw?.department ||
+      item.lead?.department ||
+      item.task?.department ||
+      ''
+    ).toLowerCase().trim();
+
+    if (directDept) {
+      return directDept === targetDept.toLowerCase().trim();
+    }
+    const itemText = (item.problem || item.purpose || item.disease || item.condition || '').toLowerCase();
     if (targetDept === 'male') {
-      return itemDept.includes('male') || itemDept.includes('sperm') || itemDept.includes('erect') || itemDept.includes('ed');
+      return itemText.includes('male') || itemText.includes('sperm') || itemText.includes('erect') || itemText.includes('ed');
     }
     if (targetDept === 'ortho') {
-      return itemDept.includes('ortho') || itemDept.includes('joint') || itemDept.includes('spine') || itemDept.includes('pain') || itemDept.includes('knee');
+      return itemText.includes('ortho') || itemText.includes('joint') || itemText.includes('spine') || itemText.includes('knee');
     }
     if (targetDept === 'skin') {
-      return itemDept.includes('skin') || itemDept.includes('acne') || itemDept.includes('derma') || itemDept.includes('eczema');
+      return itemText.includes('skin') || itemText.includes('acne') || itemText.includes('derma') || itemText.includes('eczema') || itemText.includes('psoriasis');
     }
-    return itemDept.includes(targetDept);
+    return itemText.includes(targetDept);
   };
 
   // Display only real booked appointments in Current Appointments & Patients table
@@ -231,10 +295,8 @@ export default function DoctorDashboard() {
     apptTab === 'completed' ? completedAppointments :
     deptFilteredAppointments;
 
-  // 2. Dynamic Dispatches & Follow-ups from Ready to Ship & ShipMaxx Orders
-  const dispatchRecordsPool = (todayRts.length > 0 || todaySmx.length > 0)
-    ? [...todayRts, ...todaySmx]
-    : [...safeRts.slice(0, 10), ...safeSmx.slice(0, 10)];
+  // 2. Dynamic Dispatches & Prescriptions from ShipMaxx Booked Orders ONLY (only after Ship via ShipMaxx)
+  const dispatchRecordsPool = todaySmx.length > 0 ? todaySmx : safeSmx;
 
   const combinedDispatchList = [
     ...dispatchRecordsPool.map((item) => {
@@ -313,6 +375,17 @@ export default function DoctorDashboard() {
 
   return (
     <div className="space-y-6 pb-12 animate-slide-up">
+      {!isFullAccessUser && userDepts.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-800">
+          <div className="text-2xl">⚠️</div>
+          <div>
+            <p className="text-sm font-extrabold">No Department Permissions Granted</p>
+            <p className="text-xs font-medium text-amber-700 mt-0.5">
+              Admin has not assigned any medical department (Male Health, Skin Care, or Ortho Care) to your account yet. Please contact an Admin to edit your profile permissions in Staff Directory.
+            </p>
+          </div>
+        </div>
+      )}
       {/* ── Greeting Banner ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -358,7 +431,11 @@ export default function DoctorDashboard() {
             { id: 'male', label: '👨‍⚕️ Male Health' },
             { id: 'skin', label: '✨ Skin Care' },
             { id: 'ortho', label: '🦴 Ortho Care' },
-          ].map((d) => (
+          ].filter((d) => {
+            if (isFullAccessUser) return true;
+            if (d.id === 'all') return userDepts.length > 1;
+            return userDepts.includes(d.id);
+          }).map((d) => (
             <button
               key={d.id}
               type="button"
@@ -615,6 +692,12 @@ export default function DoctorDashboard() {
                                       pid: item._id || item.id || item.lead_id,
                                       verifiedBy: item.verifiedBy?.name || item.verified_by?.name || item.createdBy?.name,
                                       doctorName: item.doctorName || item.doctor || item.createdBy?.name || user?.name,
+                                      age: item.age || item.lead?.age || item.lead_id?.age,
+                                      weight: item.weight || item.lead?.weight || item.lead_id?.weight,
+                                      gender: item.gender || item.lead?.gender || item.lead_id?.gender,
+                                      maritalStatus: item.maritalStatus || item.lead?.maritalStatus || item.lead_id?.maritalStatus,
+                                      occupation: item.occupation || item.lead?.occupation || item.lead_id?.occupation,
+                                      since: item.since || item.problemDuration || item.lead?.problemDuration || item.lead_id?.problemDuration,
                                     });
                                     setPrescriptionOpen(true);
                                   }}
@@ -669,7 +752,7 @@ export default function DoctorDashboard() {
                     </span>
                   )}
                 </h3>
-                <p className="text-[10px] text-gray-400 font-bold mt-0.5">Ready to Ship & ShipMaxx Prescriptions</p>
+                <p className="text-[10px] text-gray-400 font-bold mt-0.5">ShipMaxx Booked Prescriptions</p>
               </div>
               <div className="flex items-center gap-1.5">
                 <button
@@ -764,6 +847,12 @@ export default function DoctorDashboard() {
                         department: f.department,
                         amount: f.amount,
                         pid: f.id,
+                        age: f.age,
+                        weight: f.weight,
+                        gender: f.gender,
+                        maritalStatus: f.maritalStatus,
+                        occupation: f.occupation,
+                        since: f.since || f.problemDuration,
                       });
                       setPrescriptionOpen(true);
                     }}
@@ -811,6 +900,12 @@ export default function DoctorDashboard() {
                               department: f.department,
                               amount: f.amount,
                               pid: f.id,
+                              age: f.age,
+                              weight: f.weight,
+                              gender: f.gender,
+                              maritalStatus: f.maritalStatus,
+                              occupation: f.occupation,
+                              since: f.since || f.problemDuration,
                             });
                             setPrescriptionOpen(true);
                           }}
@@ -987,6 +1082,14 @@ export default function DoctorDashboard() {
                       department: selectedApptDetail.department,
                       amount: selectedApptDetail.amount,
                       pid: selectedApptDetail._id || selectedApptDetail.id,
+                      verifiedBy: selectedApptDetail.verifiedBy?.name || selectedApptDetail.verified_by?.name || selectedApptDetail.verifiedBy,
+                      doctorName: selectedApptDetail.doctorName || selectedApptDetail.createdBy?.name,
+                      age: selectedApptDetail.age || selectedApptDetail.lead?.age,
+                      weight: selectedApptDetail.weight || selectedApptDetail.lead?.weight,
+                      gender: selectedApptDetail.gender || selectedApptDetail.lead?.gender,
+                      maritalStatus: selectedApptDetail.maritalStatus || selectedApptDetail.lead?.maritalStatus,
+                      occupation: selectedApptDetail.occupation || selectedApptDetail.lead?.occupation,
+                      since: selectedApptDetail.since || selectedApptDetail.problemDuration || selectedApptDetail.lead?.problemDuration,
                     });
                     setViewApptModalOpen(false);
                     setPrescriptionOpen(true);

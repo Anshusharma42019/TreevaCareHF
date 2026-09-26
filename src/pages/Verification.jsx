@@ -262,6 +262,7 @@ export default function Verification() {
       assignedTo: r.assignedTo || r.task?.assignedTo,
       title: r.title || r.task?.title,
       department: r.department || r.task?.department || r.lead?.department,
+      price: r.price ?? r.task?.price ?? r.lead?.price ?? r.lead?.revenue ?? null,
       task: r.task,
       _isPipelineOnly: r._isPipelineOnly,
     };
@@ -286,6 +287,9 @@ export default function Verification() {
       age: selected.age || '',
       weight: selected.weight || '',
       height: selected.height || '',
+      gender: selected.gender || selected.lead?.gender || '',
+      occupation: selected.occupation || selected.lead?.occupation || '',
+      maritalStatus: selected.maritalStatus || selected.lead?.maritalStatus || '',
       otherProblems: selected.otherProblems || '',
       problemDuration: selected.problemDuration || '',
       cityVillageType: selected.cityVillageType || 'city',
@@ -609,6 +613,11 @@ export default function Verification() {
                               {flattened.lead.phone}
                             </span>
                           )}
+                          {flattened.price != null && (
+                            <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                              ₹{flattened.price}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
@@ -769,6 +778,32 @@ export default function Verification() {
                   <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Height</label>
                     <input type="number" step="0.1" className={`${inputCls} mt-1`} value={editForm.height} onChange={e => sf('height', e.target.value)} /></div>
                 </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Gender</label>
+                    <select className={`${inputCls} mt-1`} value={editForm.gender || ''} onChange={e => sf('gender', e.target.value)}>
+                      <option value="">Select Gender</option>
+                      <option value="Male">Male (पुरुष)</option>
+                      <option value="Female">Female (महिला)</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Marital Status</label>
+                    <select className={`${inputCls} mt-1`} value={editForm.maritalStatus || ''} onChange={e => sf('maritalStatus', e.target.value)}>
+                      <option value="">Select Status</option>
+                      <option value="Single">Single (अविवाहित)</option>
+                      <option value="Married">Married (विवाहित)</option>
+                      <option value="Divorced">Divorced (तलाकशुदा)</option>
+                      <option value="Widowed">Widowed (विधवा/विधुर)</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Occupation</label>
+                    <input className={`${inputCls} mt-1`} placeholder="Occupation" value={editForm.occupation || ''} onChange={e => sf('occupation', e.target.value)} />
+                  </div>
+                </div>
                 <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Other Problems</label>
                   <textarea rows={2} className={`${inputCls} mt-1`} value={editForm.otherProblems} onChange={e => sf('otherProblems', e.target.value)} /></div>
                 <div className="grid grid-cols-2 gap-3">
@@ -851,6 +886,9 @@ export default function Verification() {
                 <DetailRow label="Description" value={selected.description} />
 
                 <SectionHead label="Health Info" />
+                <DetailRow label="Gender" value={selected.gender || selected.lead?.gender} />
+                <DetailRow label="Marital Status" value={selected.maritalStatus || selected.lead?.maritalStatus} />
+                <DetailRow label="Occupation" value={selected.occupation || selected.lead?.occupation} />
                 <DetailRow label="Problem" value={selected.problem || selected.lead?.problem} />
                 <DetailRow label="Duration" value={selected.problemDuration} />
                 <DetailRow label="Age" value={selected.age ? `${selected.age} yrs` : null} />
@@ -877,7 +915,7 @@ export default function Verification() {
                 )}
 
                 <SectionHead label="Order" />
-                <DetailRow label="Price" value={selected.price ? `₹${selected.price}` : null} />
+                <DetailRow label="Price" value={selected.price != null ? `₹${selected.price}` : '—'} />
                 {selected.relief_percentage != null && (
                   <div className="flex items-start gap-3 py-2 border-b border-gray-50">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">Relief %</span>
@@ -977,6 +1015,23 @@ export default function Verification() {
                       <input type="number" placeholder="Wt" className={inputCls} value={editForm.weight} onChange={e => sf('weight', e.target.value)} />
                       <input type="number" step="0.1" placeholder="Ht" className={inputCls} value={editForm.height} onChange={e => sf('height', e.target.value)} />
                     </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <select className={`${inputCls} text-xs`} value={editForm.gender || ''} onChange={e => sf('gender', e.target.value)}>
+                        <option value="">Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      <select className={`${inputCls} text-xs`} value={editForm.maritalStatus || ''} onChange={e => sf('maritalStatus', e.target.value)}>
+                        <option value="">Marital</option>
+                        <option value="Single">Single</option>
+                        <option value="Married">Married</option>
+                        <option value="Divorced">Divorced</option>
+                        <option value="Widowed">Widowed</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      <input placeholder="Occupation" className={inputCls} value={editForm.occupation || ''} onChange={e => sf('occupation', e.target.value)} />
+                    </div>
                   </div>
                   <div className="flex gap-2 pt-2 pb-2">
                     <button type="submit" disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-green-600 shadow-md">Save</button>
@@ -1012,6 +1067,9 @@ export default function Verification() {
                       ) : <span className="text-sm text-gray-400">—</span>}
                     </span>
                   </div>
+                  <DetailRow label="Gender" value={selected.gender || selected.lead?.gender} />
+                  <DetailRow label="Marital Status" value={selected.maritalStatus || selected.lead?.maritalStatus} />
+                  <DetailRow label="Occupation" value={selected.occupation || selected.lead?.occupation} />
                   <DetailRow label="Problem" value={selected.problem} />
                   <DetailRow label="Duration" value={selected.problemDuration} />
 

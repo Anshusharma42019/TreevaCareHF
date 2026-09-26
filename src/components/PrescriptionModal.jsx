@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer, Edit3, Eye, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import API from '../api';
 
 /* ─── Clinic Defaults ─────────────────────────────────────────────────────── */
 const DEFAULT_CLINIC = {
@@ -20,32 +21,22 @@ export const DEPARTMENT_PRESETS = {
     name: 'Male Health / Sperm Count',
     treatmentTitle: 'Sperm Count & Male Health Treatment',
     motherTinctures: [
-      { id: 'wm40', code: 'WM 40', name: 'Clematis Erecta Q' },
-      { id: 'wm38', code: 'WM 38', name: 'Eryngium Aqua Q' },
-      { id: 'wm11', code: 'WM 11', name: 'Damiana Q' },
-      { id: 'wm12', code: 'WM 12', name: 'Yohimbinum Q' },
-      { id: 'wm13', code: 'WM 13', name: 'Nuphar Luta Q' },
-      { id: 'wm14', code: 'WM 14', name: 'Avena Sativa Q' },
-      { id: 'wm15', code: 'WM 15', name: 'Ginseng Q' },
-      { id: 'wm23', code: 'WM 23', name: 'Cydonia Q' },
-      { id: 'wm24', code: 'WM 24', name: 'Agnus Q' },
-      { id: 'wm26', code: 'WM 26', name: 'Aswagandha Q' },
-      { id: 'wm27', code: 'WM 27', name: 'Withania Q' },
-      { id: 'wm30', code: 'WM 30', name: 'Tribulus Q' },
-      { id: 'wm31', code: 'WM 31', name: 'Maria Puma Q' },
-      { id: 'wm32', code: 'WM 32', name: 'WMP Q' },
-      { id: 'wm36', code: 'WM 36', name: 'Coca Q' },
-      { id: 'wm37', code: 'WM 37', name: 'Chimaphila Q' },
+      { id: 'wm01', code: 'WM 01', name: 'Avena Sativa Q' },
+      { id: 'wm02', code: 'WM 02', name: 'Ashwagandha Q' },
+      { id: 'wm03', code: 'WM 03', name: 'Damiana Q' },
+      { id: 'wm04', code: 'WM 04', name: 'Tribulus Terr Q' },
+      { id: 'wm05', code: 'WM 05', name: 'Yohimbinum Q' },
+      { id: 'wm06', code: 'WM 06', name: 'Agnus Castus Q' },
+      { id: 'wm07', code: 'WM 07', name: 'Nuphar Luteum Q' },
+      { id: 'wm08', code: 'WM 08', name: 'Caladium Q' },
+      { id: 'wm09', code: 'WM 09', name: 'Ginkgo Biloba Q' },
+      { id: 'wm10', code: 'WM 10', name: 'Side Cordifolia Q' },
+      { id: 'wm11', code: 'WM 11', name: 'Ginseng Q' },
+      { id: 'wm12', code: 'WM 12', name: 'Salix Nigra Q' },
     ],
     potencyGrid: [
-      { id: 'wm41', code: 'WM 41', name: 'Sarsaparilla Q', dosages: [] },
-      { id: 'wm39', code: 'WM 39', name: 'Sabal Serrulata Q', dosages: [] },
-      { id: 'wm16', code: 'WM 16', name: 'Acid Phos', dosages: ['3', '2', '1'] },
-      { id: 'wm17', code: 'WM 17', name: 'Selenium', dosages: ['3X', '3', '2', '1'] },
-      { id: 'wm18', code: 'WM 18', name: 'Agnus', dosages: ['3', '2', '1'] },
-      { id: 'wm19', code: 'WM 19', name: 'Caladium', dosages: ['3', '2', '1'] },
-      { id: 'wm20', code: 'WM 20', name: 'Nuphar Luta', dosages: ['3', '2', '1'] },
-      { id: 'wm21', code: 'WM 21', name: 'Staphysagria', dosages: ['3', '2', '1'] },
+      { id: 'wm20', code: 'WM 20', name: 'Lycopodium', dosages: ['3X', '3', '2', '1'] },
+      { id: 'wm21', code: 'WM 21', name: 'Selenium', dosages: ['3X', '3', '2', '1'] },
       { id: 'wm22', code: 'WM 22', name: 'Cydonia', dosages: ['3', '2', '1'] },
       { id: 'wm25', code: 'WM 25', name: 'Yohimbinum', dosages: ['3', '2', '1'] },
       { id: 'wm28', code: 'WM 28', name: 'Moschus', dosages: ['3X', '3', '2', '1'] },
@@ -202,6 +193,24 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('preview'); // 'preview' | 'edit'
   const [selectedDeptKey, setSelectedDeptKey] = useState('male');
+  const medicineInputRef = useRef(null);
+
+  // Compute accessible department keys for current user/doctor
+  const allowedDeptKeys = useMemo(() => {
+    if (['admin', 'manager'].includes(user?.role)) {
+      return ['male', 'skin', 'ortho'];
+    }
+    const userDepts = (
+      Array.isArray(user?.departments) && user.departments.length > 0
+        ? user.departments
+        : user?.department
+        ? [user.department]
+        : []
+    ).map((d) => String(d).toLowerCase());
+
+    const valid = ['male', 'skin', 'ortho'].filter((d) => userDepts.includes(d));
+    return valid;
+  }, [user]);
 
   // Header & Patient Info State
   const [clinic, setClinic] = useState(DEFAULT_CLINIC);
@@ -237,10 +246,63 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
   const [potencyGrid, setPotencyGrid] = useState([]);
   const [extraFormulations, setExtraFormulations] = useState([]);
 
-  // Selected Checkboxes
+  // Save state
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
   const [selectedMotherTinctures, setSelectedMotherTinctures] = useState({});
   const [selectedPotencies, setSelectedPotencies] = useState({}); // { [id]: { selected: boolean, selectedDosages: { [dose]: boolean } } }
   const [selectedExtras, setSelectedExtras] = useState({});
+
+  // Custom Prescribed Medicines State
+  const [showQuickAdder, setShowQuickAdder] = useState(false);
+  const [prescribedMedicines, setPrescribedMedicines] = useState([]);
+  const [newMed, setNewMed] = useState({
+    name: '',
+    dosage: '15 Drops',
+    frequency: 'BD',
+    timing: 'After Food',
+    duration: '1 Month',
+  });
+
+  const addPrescribedMedicine = () => {
+    if (!newMed.name.trim()) return;
+    setPrescribedMedicines((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        name: newMed.name.trim(),
+        dosage: newMed.dosage || '15 Drops',
+        frequency: newMed.frequency || 'BD',
+        timing: newMed.timing || 'After Food',
+        duration: newMed.duration || '1 Month',
+      },
+    ]);
+    setNewMed({
+      name: '',
+      dosage: '15 Drops',
+      frequency: 'BD',
+      timing: 'After Food',
+      duration: '1 Month',
+    });
+  };
+
+  const quickAddMedicine = (medName, customDose = '15 Drops', customFreq = 'BD', customTiming = 'After Food', customDur = '1 Month') => {
+    setPrescribedMedicines((prev) => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        name: medName,
+        dosage: customDose,
+        frequency: customFreq,
+        timing: customTiming,
+        duration: customDur,
+      },
+    ]);
+  };
+
+  const removePrescribedMedicine = (id) => {
+    setPrescribedMedicines((prev) => prev.filter((m) => m.id !== id));
+  };
 
   // Helper to load department dataset
   const applyDepartmentPreset = (deptKey, keepCustomComplaints = false) => {
@@ -297,65 +359,244 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
       const cleanPid = pidVal ? (pidVal.toString().replace(/\D/g, '') || pidVal).slice(-6) : '';
       const randomPrescId = `treeva${Math.floor(10000000 + Math.random() * 90000000)}`;
 
-      // Detect Department
-      const rawDept = (patientData.department || patientData.dept || patientData.treatingFor || patientData.problem || '').toLowerCase();
+      // Detect Department from patientData first, then fallback to Doctor/User assigned department
+      const userDept = (user?.department || user?.departments?.[0] || '').toLowerCase();
+      const patientExplicitDept = (
+        patientData.department ||
+        patientData.dept ||
+        patientData.lead?.department ||
+        patientData.task?.department ||
+        patientData.raw?.department ||
+        patientData.lead_id?.department ||
+        ''
+      ).toLowerCase();
+
+      const rawProblemText = (
+        patientData.problem ||
+        patientData.treatingFor ||
+        patientData.disease ||
+        patientData.description ||
+        patientData.lead?.problem ||
+        patientData.task?.problem ||
+        ''
+      ).toLowerCase();
+
       let targetDept = 'male';
-      if (rawDept.includes('ortho') || rawDept.includes('joint') || rawDept.includes('spine') || rawDept.includes('bone') || rawDept.includes('pain')) {
+
+      // 1. For doctor role with a single assigned department, strictly default to that assigned department
+      if (user?.role === 'doctor' && allowedDeptKeys.length === 1) {
+        targetDept = allowedDeptKeys[0];
+      }
+      // 2. Check patient explicit department field if doctor has multiple/admin access
+      else if (['male', 'skin', 'ortho'].includes(patientExplicitDept)) {
+        targetDept = patientExplicitDept;
+      }
+      // 3. Check problem keywords for Ortho, Skin, or Male
+      else if (
+        rawProblemText.includes('ortho') ||
+        rawProblemText.includes('joint') ||
+        rawProblemText.includes('spine') ||
+        rawProblemText.includes('knee') ||
+        rawProblemText.includes('bone') ||
+        rawProblemText.includes('back pain') ||
+        rawProblemText.includes('arthritis')
+      ) {
         targetDept = 'ortho';
-      } else if (rawDept.includes('skin') || rawDept.includes('derma') || rawDept.includes('acne') || rawDept.includes('eczema') || rawDept.includes('psoriasis')) {
+      } else if (
+        rawProblemText.includes('skin') ||
+        rawProblemText.includes('derma') ||
+        rawProblemText.includes('acne') ||
+        rawProblemText.includes('eczema') ||
+        rawProblemText.includes('psoriasis') ||
+        rawProblemText.includes('fungal') ||
+        rawProblemText.includes('itching') ||
+        rawProblemText.includes('ringworm')
+      ) {
         targetDept = 'skin';
+      } else if (
+        rawProblemText.includes('male') ||
+        rawProblemText.includes('sperm') ||
+        rawProblemText.includes('erect') ||
+        rawProblemText.includes('timing') ||
+        rawProblemText.includes('semen') ||
+        rawProblemText.includes('libido') ||
+        rawProblemText.includes('testosterone')
+      ) {
+        targetDept = 'male';
+      }
+      // 4. Fallback to Doctor/User assigned department
+      else if (['male', 'skin', 'ortho'].includes(userDept)) {
+        targetDept = userDept;
+      }
+
+      // Restrict targetDept to doctor's permitted department permissions unless admin/manager
+      if (!allowedDeptKeys.includes(targetDept) && !['admin', 'manager'].includes(user?.role)) {
+        targetDept = allowedDeptKeys[0] || 'male';
       }
 
       applyDepartmentPreset(targetDept, !!patientData.problem);
 
-      setPatientInfo((prev) => {
-        const verifierVal =
-          (typeof patientData.verifiedBy === 'object' ? patientData.verifiedBy?.name : patientData.verifiedBy) ||
-          (typeof patientData.verified_by === 'object' ? patientData.verified_by?.name : patientData.verified_by) ||
-          patientData.verifiedByName ||
-          patientData.verifierName ||
-          (typeof patientData.assignedTo === 'object' ? patientData.assignedTo?.name : patientData.assignedTo) ||
-          patientData.lead?.assignedTo?.name ||
-          patientData.lead?.createdBy?.name ||
-          patientData.task?.assignedTo?.name ||
-          patientData.createdBy?.name ||
-          patientData.created_by?.name ||
-          patientData.staffName ||
-          (user?.role !== 'doctor' && user?.name ? user.name : '') ||
-          prev.verifierName ||
-          '';
+      const verifierVal =
+        (typeof patientData.verifiedBy === 'object' ? patientData.verifiedBy?.name : patientData.verifiedBy) ||
+        (typeof patientData.verified_by === 'object' ? patientData.verified_by?.name : patientData.verified_by) ||
+        patientData.verifiedByName ||
+        patientData.verifierName ||
+        (typeof patientData.assignedTo === 'object' ? patientData.assignedTo?.name : patientData.assignedTo) ||
+        patientData.lead?.assignedTo?.name ||
+        patientData.lead?.createdBy?.name ||
+        patientData.task?.assignedTo?.name ||
+        patientData.createdBy?.name ||
+        patientData.created_by?.name ||
+        patientData.staffName ||
+        (user?.role !== 'doctor' && user?.name ? user.name : '') ||
+        '';
 
-        return {
+      setPatientInfo((prev) => ({
+        ...prev,
+        name: patientData.patientName || patientData.billing_customer_name || patientData.customer_name || patientData.name || 'Patient',
+        mobile: patientData.mobile || patientData.billing_phone || patientData.phone_number || patientData.phone || '',
+        pid: cleanPid,
+        prescriptionId: patientData.prescriptionId || `${randomPrescId} (${(patientData.state || 'INDIA').toUpperCase()})`,
+        amount: patientData.amount ? `₹${patientData.amount} (${patientData.payment_type || patientData.paymentMethod || 'cod'})` : patientData.sub_total ? `₹${patientData.sub_total} (cod)` : '',
+        verifierName: verifierVal,
+      }));
+
+      const cleanMobile = (patientData.mobile || patientData.billing_phone || patientData.phone_number || patientData.phone || '').replace(/\D/g, '').slice(-10);
+
+      const applyVitals = (obj) => {
+        if (!obj) return;
+        const a = obj.age ?? obj.lead?.age;
+        const w = obj.weight ?? obj.lead?.weight;
+        const g = obj.gender ?? obj.lead?.gender ?? obj.sex;
+        const m = obj.maritalStatus ?? obj.marriedStatus ?? obj.marital_status ?? obj.marital ?? obj.lead?.maritalStatus ?? obj.lead?.marriedStatus;
+        const p = obj.occupation ?? obj.profession ?? obj.lead?.occupation;
+        const s = obj.problemDuration ?? obj.since ?? obj.duration ?? obj.lead?.problemDuration;
+        const t = obj.problem ?? obj.disease ?? obj.treatingFor ?? obj.lead?.problem;
+
+        setPatientInfo((prev) => ({
           ...prev,
-          name: patientData.patientName || patientData.billing_customer_name || patientData.customer_name || patientData.name || 'Patient',
-          mobile: patientData.mobile || patientData.billing_phone || patientData.phone_number || patientData.phone || '',
-          pid: cleanPid,
-          prescriptionId: patientData.prescriptionId || `${randomPrescId} (${(patientData.state || 'INDIA').toUpperCase()})`,
-          amount: patientData.amount ? `₹${patientData.amount} (${patientData.payment_type || patientData.paymentMethod || 'cod'})` : patientData.sub_total ? `₹${patientData.sub_total} (cod)` : '',
-          age: patientData.age || prev.age || '',
-          weight: patientData.weight || prev.weight || '',
-          treatingFor: patientData.problem || patientData.disease || patientData.treatingFor || DEPARTMENT_PRESETS[targetDept].treatmentTitle,
-          verifierName: verifierVal,
-        };
-      });
+          age: (a !== undefined && a !== null && a !== '' && a !== '-') ? String(a) : prev.age,
+          weight: (w !== undefined && w !== null && w !== '' && w !== '-') ? String(w) : prev.weight,
+          gender: (g !== undefined && g !== null && g !== '' && g !== '-') ? String(g) : prev.gender,
+          marriedStatus: (m !== undefined && m !== null && m !== '' && m !== '-') ? String(m) : prev.marriedStatus,
+          profession: (p !== undefined && p !== null && p !== '' && p !== '-') ? String(p) : prev.profession,
+          since: (s !== undefined && s !== null && s !== '' && s !== '-') ? String(s) : prev.since,
+          treatingFor: (t !== undefined && t !== null && t !== '' && t !== '-') ? String(t) : prev.treatingFor,
+        }));
+      };
 
-      // Custom complaints override if provided in patientData
-      if (patientData.problem || patientData.complaints) {
-        const rawProblem = patientData.problem || patientData.complaints;
-        if (Array.isArray(rawProblem)) {
-          setComplaints(rawProblem);
-        } else if (typeof rawProblem === 'string' && rawProblem.trim()) {
-          const split = rawProblem.split('\n').filter(Boolean);
-          if (split.length > 0) setComplaints(split);
-        }
+      // 1. Initial apply from patientData & populated lead/raw objects
+      applyVitals(patientData.lead || patientData.lead_id || patientData.raw?.lead);
+      applyVitals(patientData.raw);
+      applyVitals(patientData);
+
+      // Load prescribedMedicines if saved on patientData or populated lead/task
+      const mList =
+        (Array.isArray(patientData.prescribedMedicines) && patientData.prescribedMedicines.length > 0
+          ? patientData.prescribedMedicines
+          : null) ||
+        (patientData.lead && Array.isArray(patientData.lead.prescribedMedicines) && patientData.lead.prescribedMedicines.length > 0
+          ? patientData.lead.prescribedMedicines
+          : null) ||
+        (patientData.task && Array.isArray(patientData.task.prescribedMedicines) && patientData.task.prescribedMedicines.length > 0
+          ? patientData.task.prescribedMedicines
+          : null) ||
+        (Array.isArray(patientData.medicines) && patientData.medicines.length > 0
+          ? patientData.medicines
+          : null) ||
+        (Array.isArray(patientData.prescribedMedicines)
+          ? patientData.prescribedMedicines
+          : Array.isArray(patientData.lead?.prescribedMedicines)
+          ? patientData.lead.prescribedMedicines
+          : []);
+
+      setPrescribedMedicines(mList);
+
+      // 2. Dedicated fetch from MongoDB Prescription collection
+      const targetId = patientData._id || patientData.id || patientData.pid;
+      const leadId = patientData.lead?._id || patientData.lead || patientData.lead_id?._id || patientData.lead_id;
+      const taskId = patientData.task?._id || patientData.task;
+
+      if (targetId || leadId || taskId) {
+        API.get('/prescriptions/get-by-target', {
+          params: {
+            targetId: targetId ? String(targetId) : undefined,
+            leadId: leadId ? String(leadId) : undefined,
+            taskId: taskId ? String(taskId) : undefined,
+          },
+        })
+          .then((res) => {
+            const pData = res.data?.data;
+            if (pData) {
+              if (Array.isArray(pData.prescribedMedicines) && pData.prescribedMedicines.length > 0) {
+                setPrescribedMedicines(pData.prescribedMedicines);
+              }
+              applyVitals(pData);
+            }
+          })
+          .catch(() => {});
+      }
+
+      // 3. Async fetch verification details if targetId exists
+      if (targetId) {
+        API.get(`/verification/${targetId}`)
+          .then((res) => {
+            const v = res.data?.data || res.data;
+            applyVitals(v);
+          })
+          .catch(() => {});
+      }
+
+      // 4. Async fetch lead details directly if leadId exists
+      if (leadId) {
+        API.get(`/leads/${leadId}`)
+          .then((res) => {
+            const l = res.data?.data || res.data;
+            applyVitals(l);
+          })
+          .catch(() => {});
+      }
+
+      // 5. Async search lead by phone number to get exact Sales Team entry
+      if (cleanMobile && cleanMobile.length >= 10) {
+        API.get('/leads/search-phone', { params: { phone: cleanMobile } })
+          .then((res) => {
+            const list = res.data?.data || res.data;
+            if (Array.isArray(list) && list.length > 0) {
+              const foundLead = list.find((item) => item.age || item.weight || item.occupation || item.problemDuration) || list[0];
+              applyVitals(foundLead);
+            }
+          })
+          .catch(() => {});
       }
     } else {
       applyDepartmentPreset('male');
+      setPrescribedMedicines([]);
     }
   }, [patientData, isOpen, user]);
 
   const allowedRoles = ['admin', 'manager', 'doctor'];
   if (!isOpen || !allowedRoles.includes(user?.role)) return null;
+
+  if (!['admin', 'manager'].includes(user?.role) && allowedDeptKeys.length === 0) {
+    return createPortal(
+      <div className="prescription-portal-container" style={{ position: 'fixed', inset: 0, zIndex: 99999 }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.75)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
+          <div style={{ backgroundColor: '#fff', padding: '32px', borderRadius: '16px', maxWidth: '440px', width: '100%', textAlign: 'center' }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔒</div>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>No Department Access</h3>
+            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>
+              Your account has no department permissions assigned. Please ask an Admin to grant you access in Staff Directory.
+            </p>
+            <button type="button" onClick={onClose} style={{ backgroundColor: '#0f172a', color: '#fff', padding: '10px 24px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer' }}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   /* ─── Handlers ─────────────────────────────────────────────────────────── */
   const toggleMotherTincture = (id) => {
@@ -406,6 +647,72 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSaveDetails = async () => {
+    if (!patientData) return;
+    setSavingDetails(true);
+    setSaveMsg('');
+    try {
+      const updateData = {
+        age: patientInfo.age,
+        weight: patientInfo.weight,
+        gender: patientInfo.gender,
+        maritalStatus: patientInfo.marriedStatus,
+        occupation: patientInfo.profession,
+        problemDuration: patientInfo.since,
+        problem: patientInfo.treatingFor,
+        prescribedMedicines: prescribedMedicines,
+      };
+
+      const targetId = patientData._id || patientData.id || patientData.pid;
+      const leadId = patientData.lead?._id || patientData.lead || patientData.lead_id?._id || patientData.lead_id;
+      const taskId = patientData.task?._id || patientData.task;
+
+      // 1. Save to dedicated MongoDB Prescription collection
+      await API.post('/prescriptions/save', {
+        targetId: targetId ? String(targetId) : undefined,
+        leadId: leadId ? String(leadId) : undefined,
+        taskId: taskId ? String(taskId) : undefined,
+        patientName: patientInfo.name,
+        phone: patientInfo.mobile,
+        age: patientInfo.age,
+        weight: patientInfo.weight,
+        gender: patientInfo.gender,
+        maritalStatus: patientInfo.marriedStatus,
+        occupation: patientInfo.profession,
+        problemDuration: patientInfo.since,
+        problem: patientInfo.treatingFor,
+        doctorName: clinic.doctorName,
+        doctorDegree: clinic.doctorDegree,
+        department: selectedDeptKey,
+        prescribedMedicines: prescribedMedicines,
+        complaints: complaints,
+      }).catch((err) => console.error('Prescription save error:', err));
+
+      // 2. Sync to related entity models for backward compatibility
+      if (leadId) await API.patch(`/leads/${leadId}`, updateData).catch(() => {});
+      if (taskId) await API.patch(`/tasks/${taskId}`, updateData).catch(() => {});
+      if (targetId) {
+        await API.patch(`/verification/${targetId}`, updateData).catch(() => {});
+        await API.patch(`/readytoshipment/${targetId}`, updateData).catch(() => {});
+        await API.patch(`/appointments/${targetId}`, updateData).catch(() => {});
+      }
+
+      // Sync to local patientData reference so UI remains in sync
+      patientData.prescribedMedicines = prescribedMedicines;
+      if (patientData.lead && typeof patientData.lead === 'object') {
+        patientData.lead.prescribedMedicines = prescribedMedicines;
+      }
+
+      setSaveMsg('✓ Details saved & synced to database!');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } catch (err) {
+      setSaveMsg('⚠ Saved locally for this session.');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } finally {
+      setSavingDetails(false);
+    }
   };
 
   /* ─── Render Modal ─────────────────────────────────────────────────────── */
@@ -482,6 +789,31 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Department Switcher Dropdown */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Dept:</span>
+                <select
+                  value={selectedDeptKey}
+                  onChange={(e) => applyDepartmentPreset(e.target.value)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    backgroundColor: '#ffffff',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  }}
+                >
+                  {allowedDeptKeys.includes('male') && <option value="male">♂️ Male Health</option>}
+                  {allowedDeptKeys.includes('skin') && <option value="skin">🌿 Skin Care</option>}
+                  {allowedDeptKeys.includes('ortho') && <option value="ortho">🦴 Ortho & Joint Care</option>}
+                </select>
+              </div>
+
               {/* Tab Selector */}
               <div
                 style={{
@@ -590,244 +922,390 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                   boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h4 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                    Patient & Department Prescription Settings
+                {/* 👤 Patient Info & Vitals Section */}
+                <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>👤 Patient Info & Vitals (Age, Gender, Marital Status, Weight, Profession, Duration)</span>
                   </h4>
-
-                  {/* Department Preset Selector */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
-                      Select Department Preset:
-                    </label>
-                    <select
-                      value={selectedDeptKey}
-                      onChange={(e) => applyDepartmentPreset(e.target.value)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        backgroundColor: '#f1f5f9',
-                        color: '#0f172a',
-                      }}
-                    >
-                      <option value="male">Male Health / Sperm Count</option>
-                      <option value="ortho">Ortho & Joint Care</option>
-                      <option value="skin">Dermatology & Skin Care</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '20px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      Doctor Name (Medicines Checked By)
-                    </label>
-                    <input
-                      type="text"
-                      value={clinic.doctorName}
-                      onChange={(e) => setClinic({ ...clinic, doctorName: e.target.value })}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 600, color: '#0f172a' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      Verification Added By (Staff Name)
-                    </label>
-                    <input
-                      type="text"
-                      value={patientInfo.verifierName}
-                      onChange={(e) => setPatientInfo({ ...patientInfo, verifierName: e.target.value })}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 600, color: '#0f172a' }}
-                      placeholder="e.g. Vinay Pal"
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      Doctor Degree / Qualification
-                    </label>
-                    <input
-                      type="text"
-                      value={clinic.doctorDegree}
-                      onChange={(e) => setClinic({ ...clinic, doctorDegree: e.target.value })}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      Clinic Name
-                    </label>
-                    <input
-                      type="text"
-                      value={clinic.name}
-                      onChange={(e) => setClinic({ ...clinic, name: e.target.value })}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 600 }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      Patient Name
-                    </label>
-                    <input
-                      type="text"
-                      value={patientInfo.name}
-                      onChange={(e) => setPatientInfo({ ...patientInfo, name: e.target.value })}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      Mobile Number
-                    </label>
-                    <input
-                      type="text"
-                      value={patientInfo.mobile}
-                      onChange={(e) => setPatientInfo({ ...patientInfo, mobile: e.target.value })}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      PID / Order ID
-                    </label>
-                    <input
-                      type="text"
-                      value={patientInfo.pid}
-                      onChange={(e) => setPatientInfo({ ...patientInfo, pid: e.target.value })}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      Age & Weight
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr 1fr 1.5fr 1.5fr 2fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                        Age
+                      </label>
                       <input
                         type="text"
-                        placeholder="Age (e.g. 27)"
+                        placeholder="e.g. 25 Yrs"
                         value={patientInfo.age}
                         onChange={(e) => setPatientInfo({ ...patientInfo, age: e.target.value })}
-                        style={{ width: '50%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600 }}
                       />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                        Gender
+                      </label>
+                      <select
+                        value={patientInfo.gender}
+                        onChange={(e) => setPatientInfo({ ...patientInfo, gender: e.target.value })}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600, backgroundColor: '#fff' }}
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                        Marital Status
+                      </label>
+                      <select
+                        value={patientInfo.marriedStatus}
+                        onChange={(e) => setPatientInfo({ ...patientInfo, marriedStatus: e.target.value })}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600, backgroundColor: '#fff' }}
+                      >
+                        <option value="Single">Single</option>
+                        <option value="Married">Married</option>
+                        <option value="Divorced">Divorced</option>
+                        <option value="Widowed">Widowed</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                        Weight
+                      </label>
                       <input
                         type="text"
-                        placeholder="Weight (e.g. 53KG)"
+                        placeholder="e.g. 63 Kg"
                         value={patientInfo.weight}
                         onChange={(e) => setPatientInfo({ ...patientInfo, weight: e.target.value })}
-                        style={{ width: '50%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600 }}
                       />
                     </div>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      Since (Duration) & Profession
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                        Profession / Occupation
+                      </label>
                       <input
                         type="text"
-                        placeholder="Since (e.g. 6 Year)"
-                        value={patientInfo.since}
-                        onChange={(e) => setPatientInfo({ ...patientInfo, since: e.target.value })}
-                        style={{ width: '50%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Profession (e.g. Work)"
+                        placeholder="e.g. Service / Business"
                         value={patientInfo.profession}
                         onChange={(e) => setPatientInfo({ ...patientInfo, profession: e.target.value })}
-                        style={{ width: '50%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600 }}
                       />
                     </div>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                      Treating For / Problem
-                    </label>
-                    <input
-                      type="text"
-                      value={patientInfo.treatingFor}
-                      onChange={(e) => setPatientInfo({ ...patientInfo, treatingFor: e.target.value })}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    />
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                        Since (Problem Duration)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 2 Years"
+                        value={patientInfo.since}
+                        onChange={(e) => setPatientInfo({ ...patientInfo, since: e.target.value })}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                        Treating For / Problem
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Problem Description"
+                        value={patientInfo.treatingFor}
+                        onChange={(e) => setPatientInfo({ ...patientInfo, treatingFor: e.target.value })}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600 }}
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* Chief Complaints List */}
-                <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '10px' }}>
-                  Chief Complaints List
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
-                  {complaints.map((c, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748b', width: '24px' }}>{idx + 1}.</span>
-                      <input
-                        type="text"
-                        value={c}
-                        onChange={(e) => {
-                          const copy = [...complaints];
-                          copy[idx] = e.target.value;
-                          setComplaints(copy);
-                        }}
-                        style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeComplaint(idx)}
-                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                    <input
-                      type="text"
-                      placeholder="Add new chief complaint..."
-                      value={newComplaintText}
-                      onChange={(e) => setNewComplaintText(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addComplaint()}
-                      style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    />
+                {/* 💊 Prescribed Custom Medicines Section */}
+                <div>
+                  <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>💊 Prescribed Medicines (Doctor Custom Rx)</span>
                     <button
                       type="button"
-                      onClick={addComplaint}
+                      onClick={() => setActiveTab('preview')}
                       style={{
                         backgroundColor: '#0284c7',
-                        color: '#fff',
+                        color: '#ffffff',
                         border: 'none',
                         borderRadius: '6px',
-                        padding: '6px 14px',
-                        fontSize: '13px',
-                        fontWeight: 600,
+                        padding: '5px 12px',
+                        fontSize: '11px',
+                        fontWeight: 700,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
+                        boxShadow: '0 2px 4px rgba(2, 132, 199, 0.25)',
                       }}
                     >
-                      <Plus size={14} /> Add
+                      <Eye size={13} /> View Printable Prescription Grid →
                     </button>
+                  </h4>
+
+
+
+                  {/* Add New Medicine Form */}
+                  <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1.2fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                          Medicine Name
+                        </label>
+                        <input
+                          ref={medicineInputRef}
+                          type="text"
+                          placeholder="e.g. Clematis Erecta Q / Acid Phos 30"
+                          value={newMed.name}
+                          onChange={(e) => setNewMed({ ...newMed, name: e.target.value })}
+                          onKeyDown={(e) => e.key === 'Enter' && addPrescribedMedicine()}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600 }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                          Dose / Quantity
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 15 Drops / 1 Tab"
+                          value={newMed.dosage}
+                          onChange={(e) => setNewMed({ ...newMed, dosage: e.target.value })}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                          Frequency
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="OD / BD / TDS / QID"
+                          value={newMed.frequency}
+                          onChange={(e) => setNewMed({ ...newMed, frequency: e.target.value })}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                          Timing / Instructions
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="After Food / Before Food"
+                          value={newMed.timing}
+                          onChange={(e) => setNewMed({ ...newMed, timing: e.target.value })}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                          Duration
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="1 Month / 15 Days"
+                          value={newMed.duration}
+                          onChange={(e) => setNewMed({ ...newMed, duration: e.target.value })}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Preset Buttons */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', fontSize: '11px' }}>
+                      {/* Dose Presets */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontWeight: 700, color: '#64748b' }}>Quick Dose:</span>
+                        {['15 Drops', '10 Drops', '5 Drops', '1 Tab', '2 Tab'].map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setNewMed({ ...newMed, dosage: d })}
+                            style={{
+                              padding: '2px 7px',
+                              borderRadius: '4px',
+                              border: '1px solid #cbd5e1',
+                              backgroundColor: newMed.dosage === d ? '#0284c7' : '#ffffff',
+                              color: newMed.dosage === d ? '#ffffff' : '#334155',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Frequency Presets */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontWeight: 700, color: '#64748b' }}>Quick Freq:</span>
+                        {['OD', 'BD', 'TDS', 'QID', 'HS'].map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => setNewMed({ ...newMed, frequency: f })}
+                            style={{
+                              padding: '2px 7px',
+                              borderRadius: '4px',
+                              border: '1px solid #cbd5e1',
+                              backgroundColor: newMed.frequency === f ? '#16a34a' : '#ffffff',
+                              color: newMed.frequency === f ? '#ffffff' : '#334155',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {f}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Timing Presets */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontWeight: 700, color: '#64748b' }}>Timing:</span>
+                        {['After Food', 'Before Food', 'Empty Stomach'].map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setNewMed({ ...newMed, timing: t })}
+                            style={{
+                              padding: '2px 7px',
+                              borderRadius: '4px',
+                              border: '1px solid #cbd5e1',
+                              backgroundColor: newMed.timing === t ? '#6366f1' : '#ffffff',
+                              color: newMed.timing === t ? '#ffffff' : '#334155',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={addPrescribedMedicine}
+                        style={{
+                          marginLeft: 'auto',
+                          backgroundColor: '#0284c7',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '6px 14px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <Plus size={14} /> Add Medicine
+                      </button>
+                    </div>
                   </div>
+
+                  {/* List of Added Medicines */}
+                  {prescribedMedicines.length > 0 ? (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
+                            <th style={{ padding: '6px 8px', width: '30px' }}>#</th>
+                            <th style={{ padding: '6px 8px' }}>Medicine Name</th>
+                            <th style={{ padding: '6px 8px' }}>Dose/Drops</th>
+                            <th style={{ padding: '6px 8px' }}>Frequency</th>
+                            <th style={{ padding: '6px 8px' }}>Timing</th>
+                            <th style={{ padding: '6px 8px' }}>Duration</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'right' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {prescribedMedicines.map((m, idx) => (
+                            <tr key={m.id || idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                              <td style={{ padding: '6px 8px', fontWeight: 600, color: '#64748b' }}>{idx + 1}</td>
+                              <td style={{ padding: '6px 8px', fontWeight: 700, color: '#0f172a' }}>{m.name}</td>
+                              <td style={{ padding: '6px 8px', fontWeight: 700, color: '#0284c7' }}>{m.dosage}</td>
+                              <td style={{ padding: '6px 8px', fontWeight: 700, color: '#16a34a' }}>{m.frequency}</td>
+                              <td style={{ padding: '6px 8px', color: '#475569' }}>{m.timing}</td>
+                              <td style={{ padding: '6px 8px', color: '#475569' }}>{m.duration}</td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => removePrescribedMedicine(m.id)}
+                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', color: '#64748b', fontSize: '13px', fontWeight: 500 }}>
+                      📋 No custom medicines added yet. Type a medicine name above and click <strong>"+ Add Medicine"</strong> to add.
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ marginTop: '20px', textAlign: 'right' }}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('preview')}
-                    style={{
-                      backgroundColor: '#0284c7',
-                      color: '#fff',
-                      padding: '10px 24px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    View Printable Prescription Grid →
-                  </button>
+                <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  {saveMsg ? (
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#16a34a' }}>{saveMsg}</span>
+                  ) : <span />}
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={handleSaveDetails}
+                      disabled={savingDetails}
+                      style={{
+                        backgroundColor: '#16a34a',
+                        color: '#ffffff',
+                        padding: '10px 22px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        opacity: savingDetails ? 0.6 : 1,
+                        boxShadow: '0 2px 4px rgba(22, 163, 74, 0.25)',
+                      }}
+                    >
+                      {savingDetails ? 'Saving...' : '💾 Save Details to Database'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('preview')}
+                      style={{
+                        backgroundColor: '#0284c7',
+                        color: '#ffffff',
+                        padding: '10px 24px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        fontWeight: 800,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 8px rgba(2, 132, 199, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Eye size={16} /> View Printable Prescription Grid →
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -957,243 +1435,128 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '11px', borderTop: '1px dashed #ccc', paddingTop: '4px' }}>
-                  <div>Age: <strong>{patientInfo.age}</strong></div>
-                  <div>Weight: <strong>{patientInfo.weight}</strong></div>
-                  <div>Since: <strong>{patientInfo.since}</strong></div>
-                  <div>Profession: <strong>{patientInfo.profession}</strong></div>
-                  <div>Previous Medicines: <strong>{patientInfo.previousMedicines}</strong></div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', fontSize: '11px', borderTop: '1px dashed #ccc', paddingTop: '4px', color: '#0f172a' }}>
+                  <span>Age: <strong>{patientInfo.age || '-'}</strong></span>
+                  <span style={{ color: '#cbd5e1' }}>|</span>
+                  <span>Gender: <strong>{patientInfo.gender || 'Male'}</strong></span>
+                  <span style={{ color: '#cbd5e1' }}>|</span>
+                  <span>Marital Status: <strong>{patientInfo.marriedStatus || '-'}</strong></span>
+                  <span style={{ color: '#cbd5e1' }}>|</span>
+                  <span>Weight: <strong>{patientInfo.weight ? `${patientInfo.weight}` : '-'}</strong></span>
+                  <span style={{ color: '#cbd5e1' }}>|</span>
+                  <span>Since: <strong>{patientInfo.since || '-'}</strong></span>
+                  <span style={{ color: '#cbd5e1' }}>|</span>
+                  <span>Profession: <strong>{patientInfo.profession || '-'}</strong></span>
+                  {patientInfo.previousMedicines && patientInfo.previousMedicines !== 'No' && (
+                    <>
+                      <span style={{ color: '#cbd5e1' }}>|</span>
+                      <span>Previous Medicines: <strong>{patientInfo.previousMedicines}</strong></span>
+                    </>
+                  )}
                 </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '11px', marginTop: '3px' }}>
-                  <div>Treating For: <span style={{ textDecoration: 'underline', fontWeight: 600 }}>{patientInfo.treatingFor}</span></div>
-                  <div>Print Time: {patientInfo.printTime}</div>
-                  <div>Extra Details: {patientInfo.extraDetails}</div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginTop: '3px', fontWeight: 'bold' }}>
-                  <div>Patient Name: {patientInfo.name} ({patientInfo.gender})</div>
-                  <div>{patientInfo.marriedStatus}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px', fontSize: '11px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ flex: 1, minWidth: '240px' }}>
+                    Treating For: <span style={{ textDecoration: 'underline', fontWeight: 600 }}>{patientInfo.treatingFor}</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#475569', whiteSpace: 'nowrap' }}>
+                    Print Time: {patientInfo.printTime}
+                  </div>
+                  {patientInfo.extraDetails ? <div style={{ fontSize: '10px', color: '#475569' }}>Extra Details: {patientInfo.extraDetails}</div> : null}
                 </div>
               </div>
 
               {/* Chief Complaints List */}
-              <div style={{ marginBottom: '10px', fontSize: '12px' }}>
-                {complaints.map((c, idx) => (
-                  <div key={idx} style={{ lineHeight: 1.35, marginBottom: '2px' }}>
-                    {idx + 1}. {c}
-                  </div>
-                ))}
-                <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>
-                  Assasary Complain - {patientInfo.assasaryComplain}
+              {((complaints && complaints.length > 0) || (patientInfo.assasaryComplain && patientInfo.assasaryComplain !== 'No')) && (
+                <div style={{ marginBottom: '10px', fontSize: '12px' }}>
+                  {complaints.map((c, idx) => (
+                    <div key={idx} style={{ lineHeight: 1.35, marginBottom: '2px' }}>
+                      {idx + 1}. {c}
+                    </div>
+                  ))}
+                  {patientInfo.assasaryComplain && patientInfo.assasaryComplain !== 'No' && (
+                    <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>
+                      Associated Complaint - {patientInfo.assasaryComplain}
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {/* Prescribed Medicines Rx Table */}
+              <div style={{ marginTop: '12px', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #000', paddingBottom: '3px', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#000000' }}>
+                    Rx - PRESCRIBED MEDICINES & DOSAGE
+                  </div>
+                  <button
+                    type="button"
+                    className="prescription-no-print"
+                    onClick={() => {
+                      setActiveTab('edit');
+                      setTimeout(() => {
+                        medicineInputRef.current?.scrollIntoView({ behavior: 'smooth' });
+                        medicineInputRef.current?.focus();
+                      }, 100);
+                    }}
+                    style={{
+                      backgroundColor: '#0284c7',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '4px 12px',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      boxShadow: '0 2px 4px rgba(2, 132, 199, 0.25)',
+                    }}
+                  >
+                    <Plus size={13} /> + Add Medicine
+                  </button>
+                </div>
+
+                {prescribedMedicines.length > 0 && (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1.5px solid #000' }}>
+                        <th style={{ padding: '5px 6px', width: '35px', border: '1px solid #000' }}>S.No</th>
+                        <th style={{ padding: '5px 8px', border: '1px solid #000' }}>Medicine Name</th>
+                        <th style={{ padding: '5px 8px', width: '110px', border: '1px solid #000' }}>Dose / Drops</th>
+                        <th style={{ padding: '5px 8px', width: '90px', border: '1px solid #000' }}>Frequency</th>
+                        <th style={{ padding: '5px 8px', width: '120px', border: '1px solid #000' }}>Timing / Instruction</th>
+                        <th style={{ padding: '5px 8px', width: '90px', border: '1px solid #000' }}>Duration</th>
+                        <th className="prescription-no-print" style={{ padding: '5px 8px', width: '40px', border: '1px solid #000', textAlign: 'center' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {prescribedMedicines.map((med, index) => (
+                        <tr key={med.id || index} style={{ borderBottom: '1px solid #000' }}>
+                          <td style={{ padding: '5px 6px', fontWeight: 'bold', textAlign: 'center', border: '1px solid #000' }}>{index + 1}</td>
+                          <td style={{ padding: '5px 8px', fontWeight: 'bold', color: '#000', border: '1px solid #000' }}>{med.name}</td>
+                          <td style={{ padding: '5px 8px', fontWeight: 'bold', color: '#000', border: '1px solid #000' }}>{med.dosage}</td>
+                          <td style={{ padding: '5px 8px', fontWeight: 'bold', color: '#000', border: '1px solid #000' }}>{med.frequency}</td>
+                          <td style={{ padding: '5px 8px', color: '#000', border: '1px solid #000' }}>{med.timing}</td>
+                          <td style={{ padding: '5px 8px', color: '#000', border: '1px solid #000' }}>{med.duration}</td>
+                          <td className="prescription-no-print" style={{ padding: '5px 8px', border: '1px solid #000', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => removePrescribedMedicine(med.id)}
+                              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                              title="Delete medicine"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
 
-              {/* 3 Column Medicine Grid matching physical sheet */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1.2fr 0.9fr',
-                  gap: '8px',
-                  borderTop: '1px solid #000',
-                  paddingTop: '8px',
-                  fontSize: '11px',
-                }}
-              >
-                {/* Column 1: Mother Tinctures (Q) */}
-                <div>
-                  <div style={{ fontWeight: 'bold', borderBottom: '1px solid #94a3b8', paddingBottom: '3px', marginBottom: '4px' }}>
-                    Mother Tinctures (Q)
-                  </div>
-                  {motherTinctures.map((med) => {
-                    const isChecked = selectedMotherTinctures[med.id];
-                    return (
-                      <div
-                        key={med.id}
-                        onClick={() => toggleMotherTincture(med.id)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          marginBottom: '3px',
-                          cursor: 'pointer',
-                          userSelect: 'none',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '12px',
-                            height: '12px',
-                            border: '1px solid #000',
-                            backgroundColor: isChecked ? '#000' : '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#fff',
-                            fontSize: '9px',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {isChecked ? '✓' : ''}
-                        </div>
-                        <span>
-                          <strong>{med.code}</strong> - {med.name}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
 
-                {/* Column 2: Potencies & Dosage Grid */}
-                <div>
-                  <div style={{ fontWeight: 'bold', borderBottom: '1px solid #94a3b8', paddingBottom: '3px', marginBottom: '4px' }}>
-                    Potencies & Dosage Grid
-                  </div>
-                  {potencyGrid.map((med) => {
-                    const medState = selectedPotencies[med.id] || {};
-                    const isSelected = medState.selected;
-
-                    return (
-                      <div
-                        key={med.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          marginBottom: '3px',
-                        }}
-                      >
-                        <div
-                          onClick={() => togglePotencyMed(med.id)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            cursor: 'pointer',
-                            userSelect: 'none',
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: '12px',
-                              height: '12px',
-                              border: '1px solid #000',
-                              backgroundColor: isSelected ? '#000' : '#fff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: '#fff',
-                              fontSize: '9px',
-                              lineHeight: 1,
-                            }}
-                          >
-                            {isSelected ? '✓' : ''}
-                          </div>
-                          <span>
-                            <strong>{med.code}</strong> - {med.name}
-                          </span>
-                        </div>
-
-                        {/* Dosage checkboxes [3X] [3] [2] [1] */}
-                        {med.dosages.length > 0 && (
-                          <div style={{ display: 'flex', gap: '3px' }}>
-                            {med.dosages.map((dose) => {
-                              const doseChecked = medState.selectedDosages?.[dose];
-                              return (
-                                <button
-                                  key={dose}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleDosage(med.id, dose);
-                                  }}
-                                  style={{
-                                    border: '1px solid #000',
-                                    backgroundColor: doseChecked ? '#000' : '#fff',
-                                    color: doseChecked ? '#fff' : '#000',
-                                    fontSize: '9px',
-                                    padding: '1px 3px',
-                                    minWidth: '18px',
-                                    textAlign: 'center',
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold',
-                                    lineHeight: '1.1',
-                                  }}
-                                >
-                                  {dose}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Column 3: Extra Formulations & Special Medicines */}
-                <div>
-                  <div style={{ fontWeight: 'bold', borderBottom: '1px solid #94a3b8', paddingBottom: '3px', marginBottom: '4px' }}>
-                    Special Formulations
-                  </div>
-                  {extraFormulations.map((extra) => {
-                    const isChecked = selectedExtras[extra.id];
-                    return (
-                      <div
-                        key={extra.id}
-                        onClick={() => toggleExtra(extra.id)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          marginBottom: '6px',
-                          cursor: 'pointer',
-                          userSelect: 'none',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '12px',
-                            height: '12px',
-                            border: '1px solid #000',
-                            backgroundColor: isChecked ? '#000' : '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#fff',
-                            fontSize: '9px',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {isChecked ? '✓' : ''}
-                        </div>
-                        <span style={{ fontSize: '11px' }}>
-                          {extra.name} - <strong>{extra.price}</strong>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Signature Footer */}
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-end',
-                  marginTop: '28px',
-                  paddingTop: '12px',
-                  fontSize: '12px',
-                }}
-              >
-                <div>
-                  Pharmacist : <span style={{ display: 'inline-block', width: '140px', borderBottom: '1px solid #000' }}></span>
-                </div>
-                <div>
-                  Checked By : <span style={{ display: 'inline-block', width: '140px', borderBottom: '1px solid #000' }}></span>
-                </div>
-              </div>
             </div>
           </div>
         </div>

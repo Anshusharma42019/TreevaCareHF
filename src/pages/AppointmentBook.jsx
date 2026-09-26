@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { getAppointments, createAppointment, updateAppointment, deleteAppointment, searchByPhone, getAvailability, getBookedSlots, addFieldNote } from '../services/appointment.service';
 import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
+import PrescriptionModal from '../components/PrescriptionModal';
 import { useSearchParams } from 'react-router-dom';
 import API from '../api';
 
@@ -15,7 +16,8 @@ const EMPTY = {
   status: 'scheduled', notes: '', patientType: 'new',
   problem: '', address: '', houseNo: '', cityVillage: '',
   postOffice: '', landmark: '', district: '', state: '', pincode: '',
-  medicineDeliveryDate: '', department: ''
+  medicineDeliveryDate: '', department: '',
+  gender: '', occupation: '', maritalStatus: '', age: '', weight: '', problemDuration: ''
 };
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition';
@@ -196,6 +198,8 @@ export default function AppointmentBook() {
   const [fieldNote, setFieldNote] = useState('');
   const [fieldNoteSaving, setFieldNoteSaving] = useState(false);
   const [phoneSearching, setPhoneSearching] = useState(false);
+  const [prescriptionOpen, setPrescriptionOpen] = useState(false);
+  const [selectedRxPatient, setSelectedRxPatient] = useState(null);
   const phoneTimerRef = useRef(null);
 
   const openWhatsApp = (phone, name) => {
@@ -602,6 +606,12 @@ export default function AppointmentBook() {
           {rightPanel.mode === 'view' && (
             <div className="px-6 py-5 overflow-y-auto flex-1 custom-scrollbar">
               <div className="space-y-0">
+                <DetailRow label="Gender" value={rightPanel.appt.gender || rightPanel.appt.lead?.gender} />
+                <DetailRow label="Marital Status" value={rightPanel.appt.maritalStatus || rightPanel.appt.lead?.maritalStatus} />
+                <DetailRow label="Occupation" value={rightPanel.appt.occupation || rightPanel.appt.lead?.occupation} />
+                <DetailRow label="Age" value={rightPanel.appt.age || rightPanel.appt.lead?.age} />
+                <DetailRow label="Weight" value={rightPanel.appt.weight || rightPanel.appt.lead?.weight} />
+                <DetailRow label="Duration (Since)" value={rightPanel.appt.problemDuration || rightPanel.appt.lead?.problemDuration} />
                 <DetailRow label="Doctor" value={`Dr. ${rightPanel.appt.doctorName}`} />
                 <DetailRow label="Department" value={rightPanel.appt.department?.toUpperCase()} />
                 <DetailRow label="Patient Type" value={rightPanel.appt.patientType} />
@@ -686,6 +696,33 @@ export default function AppointmentBook() {
                   WhatsApp
                 </button>
               </div>
+              )}
+
+              {['admin', 'manager', 'doctor', 'staff'].includes(user?.role) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRxPatient({
+                      patientName: rightPanel.appt.patientName,
+                      mobile: rightPanel.appt.phone,
+                      problem: rightPanel.appt.problem,
+                      department: rightPanel.appt.department,
+                      pid: rightPanel.appt._id,
+                      doctorName: rightPanel.appt.doctorName,
+                      age: rightPanel.appt.age || rightPanel.appt.lead?.age,
+                      weight: rightPanel.appt.weight || rightPanel.appt.lead?.weight,
+                      gender: rightPanel.appt.gender || rightPanel.appt.lead?.gender,
+                      maritalStatus: rightPanel.appt.maritalStatus || rightPanel.appt.lead?.maritalStatus,
+                      occupation: rightPanel.appt.occupation || rightPanel.appt.lead?.occupation,
+                      since: rightPanel.appt.problemDuration || rightPanel.appt.lead?.problemDuration,
+                    });
+                    setPrescriptionOpen(true);
+                  }}
+                  className="w-full py-3 mt-3 rounded-2xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 transition flex items-center justify-center gap-2 shadow-lg"
+                >
+                  <span className="font-extrabold">Rx</span>
+                  <span>Generate Doctor Prescription</span>
+                </button>
               )}
 
               {canManage && !['completed', 'cancelled', 'no_show'].includes(rightPanel.appt.status) && (
@@ -862,6 +899,13 @@ export default function AppointmentBook() {
           </div>
         </div>
       )}
+
+      {/* Doctor Prescription Modal */}
+      <PrescriptionModal
+        isOpen={prescriptionOpen}
+        onClose={() => setPrescriptionOpen(false)}
+        patientData={selectedRxPatient}
+      />
     </div>
   );
 }
