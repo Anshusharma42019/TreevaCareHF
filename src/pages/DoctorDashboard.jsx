@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getAppointments, updateAppointment } from '../services/appointment.service';
 import { fetchStats } from '../services/dashboard.service';
@@ -40,6 +41,7 @@ export default function DoctorDashboard() {
   const [shipmaxxOrders, setShipmaxxOrders] = useState([]);
   const [statsData, setStatsData] = useState(null);
   const [attStatus, setAttStatus] = useState(null);
+  const [deletedRecordIds, setDeletedRecordIds] = useState([]);
 
   // Prescription Modal State
   const [prescriptionOpen, setPrescriptionOpen] = useState(false);
@@ -201,6 +203,53 @@ export default function DoctorDashboard() {
       console.error(err);
     }
     success(`Dispatch for ${dispatchItem.name || 'patient'} marked as done!`);
+  };
+
+  const handleDeleteRecord = async (dispatchItem, e) => {
+    if (e) e.stopPropagation();
+
+    if (user?.role !== 'admin') {
+      error('Only Admin users can permanently delete records!');
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to PERMANENTLY delete the record for "${dispatchItem.name || 'this patient'}"?\n\nThis will permanently remove the prescription and order from the database. This action CANNOT be undone.`
+    );
+    if (!confirmDelete) return;
+
+    const targetId = dispatchItem.id || dispatchItem.raw?._id || dispatchItem.raw?.order_id || dispatchItem.raw?.id;
+
+    try {
+      if (targetId) {
+        await API.delete(`/prescriptions/${targetId}`).catch(() => {});
+      }
+      if (dispatchItem.raw?._id && dispatchItem.raw._id !== targetId) {
+        await API.delete(`/prescriptions/${dispatchItem.raw._id}`).catch(() => {});
+      }
+
+      if (dispatchItem.type === 'shipmaxx') {
+        if (targetId) await API.delete(`/shipmaxx/orders/${targetId}`).catch(() => {});
+        if (dispatchItem.raw?._id) await API.delete(`/shipmaxx/orders/${dispatchItem.raw._id}`).catch(() => {});
+      } else if (dispatchItem.type === 'rts') {
+        if (targetId) await API.delete(`/ready-to-shipment/${targetId}`).catch(() => {});
+        if (dispatchItem.raw?._id) await API.delete(`/ready-to-shipment/${dispatchItem.raw._id}`).catch(() => {});
+      } else if (dispatchItem.type === 'appointment') {
+        if (targetId) await API.delete(`/appointments/${targetId}`).catch(() => {});
+        if (dispatchItem.raw?._id) await API.delete(`/appointments/${dispatchItem.raw._id}`).catch(() => {});
+      } else if (dispatchItem.type === 'verification') {
+        if (targetId) await API.delete(`/verification/${targetId}`).catch(() => {});
+        if (dispatchItem.raw?._id) await API.delete(`/verification/${dispatchItem.raw._id}`).catch(() => {});
+      }
+
+      const idsToRemove = [String(targetId), String(dispatchItem.id), String(dispatchItem.raw?._id)].filter(Boolean);
+      setDeletedRecordIds((prev) => [...prev, ...idsToRemove]);
+
+      success(`Record for "${dispatchItem.name || 'patient'}" permanently deleted!`);
+      loadDashboardData();
+    } catch (err) {
+      error(err.response?.data?.message || 'Failed to delete record');
+    }
   };
 
   /* ── Dynamic Calculations from Database (with Safety Array Checks) ─────── */
@@ -475,7 +524,9 @@ export default function DoctorDashboard() {
       ? activeDispatches
       : deptFilteredDispatches;
 
-  const upcomingFollowups = filteredDispatches.slice(0, 20);
+  const upcomingFollowups = filteredDispatches
+    .filter((d) => !deletedRecordIds.includes(String(d.id)) && !deletedRecordIds.includes(String(d.raw?._id)) && !deletedRecordIds.includes(String(d.raw?.order_id)))
+    .slice(0, 30);
 
   // 3. Overall Dynamic Summary Stats (Filtered by Department & excluding historical verifications)
   const deptLeads = safeLeads.filter((l) => matchesDept(l, selectedDept));
@@ -1216,6 +1267,18 @@ export default function DoctorDashboard() {
                         >
                           <span>✓</span>
                           <span>Complete</span>
+                        </button>
+                      )}
+
+                      {/* Admin Permanent Delete Button */}
+                      {user?.role === 'admin' && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteRecord(f, e)}
+                          className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 rounded-lg transition flex items-center justify-center shadow-sm"
+                          title="Permanently Delete Record (Admin Only)"
+                        >
+                          <Trash2 size={13} />
                         </button>
                       )}
                     </div>

@@ -256,6 +256,7 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
   // Custom Prescribed Medicines State
   const [showQuickAdder, setShowQuickAdder] = useState(false);
   const [prescribedMedicines, setPrescribedMedicines] = useState([]);
+  const [editingMedId, setEditingMedId] = useState(null);
   const [newMed, setNewMed] = useState({
     name: '',
     dosage: '15 Drops',
@@ -264,19 +265,64 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
     duration: '1 Month',
   });
 
+  const startEditMedicine = (med) => {
+    setEditingMedId(med.id);
+    setNewMed({
+      name: med.name || '',
+      dosage: med.dosage || '15 Drops',
+      frequency: med.frequency || 'BD',
+      timing: med.timing || 'After Food',
+      duration: med.duration || '1 Month',
+    });
+    if (medicineInputRef.current) {
+      medicineInputRef.current.focus();
+    }
+  };
+
+  const cancelEditMedicine = () => {
+    setEditingMedId(null);
+    setNewMed({
+      name: '',
+      dosage: '15 Drops',
+      frequency: 'BD',
+      timing: 'After Food',
+      duration: '1 Month',
+    });
+  };
+
   const addPrescribedMedicine = () => {
     if (!newMed.name.trim()) return;
-    setPrescribedMedicines((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        name: newMed.name.trim(),
-        dosage: newMed.dosage || '15 Drops',
-        frequency: newMed.frequency || 'BD',
-        timing: newMed.timing || 'After Food',
-        duration: newMed.duration || '1 Month',
-      },
-    ]);
+
+    if (editingMedId) {
+      setPrescribedMedicines((prev) =>
+        prev.map((m) =>
+          m.id === editingMedId
+            ? {
+                ...m,
+                name: newMed.name.trim(),
+                dosage: newMed.dosage || '15 Drops',
+                frequency: newMed.frequency || 'BD',
+                timing: newMed.timing || 'After Food',
+                duration: newMed.duration || '1 Month',
+              }
+            : m
+        )
+      );
+      setEditingMedId(null);
+    } else {
+      setPrescribedMedicines((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          name: newMed.name.trim(),
+          dosage: newMed.dosage || '15 Drops',
+          frequency: newMed.frequency || 'BD',
+          timing: newMed.timing || 'After Food',
+          duration: newMed.duration || '1 Month',
+        },
+      ]);
+    }
+
     setNewMed({
       name: '',
       dosage: '15 Drops',
@@ -1215,7 +1261,7 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
 
                   {/* Add New Medicine Form */}
                   <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1fr 1.2fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1.2fr 1.3fr 1.3fr 1fr auto', gap: '10px', alignItems: 'flex-start' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
                           Medicine Name
@@ -1231,153 +1277,232 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                         />
                       </div>
 
+                      {/* Dose / Quantity Dropdown */}
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
                           Dose / Quantity
                         </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 15 Drops / 1 Tab"
-                          value={newMed.dosage}
-                          onChange={(e) => setNewMed({ ...newMed, dosage: e.target.value })}
-                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                        />
+                        <select
+                          value={['15 Drops', '10 Drops', '5 Drops', '20 Drops', '1 Tab', '2 Tab', '3 Tab', '1 Cap', '2 Cap', '1 Spoon (5ml)', '2 Spoon (10ml)', 'Half Spoon (2.5ml)', '1 Puff / Spray', '2 Puff / Spray', 'Local Application (लेप/तेल)'].includes(newMed.dosage) ? newMed.dosage : 'custom'}
+                          onChange={(e) => {
+                            if (e.target.value !== 'custom') {
+                              setNewMed({ ...newMed, dosage: e.target.value });
+                            }
+                          }}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600, backgroundColor: '#ffffff', color: '#0f172a' }}
+                        >
+                          <option value="15 Drops">15 Drops (15 बूँद)</option>
+                          <option value="10 Drops">10 Drops (10 बूँद)</option>
+                          <option value="5 Drops">5 Drops (5 बूँद)</option>
+                          <option value="20 Drops">20 Drops (20 बूँद)</option>
+                          <option value="1 Tab">1 Tab (1 गोली)</option>
+                          <option value="2 Tab">2 Tab (2 गोली)</option>
+                          <option value="3 Tab">3 Tab (3 गोली)</option>
+                          <option value="1 Cap">1 Cap (1 कैप्सूल)</option>
+                          <option value="2 Cap">2 Cap (2 कैप्सूल)</option>
+                          <option value="1 Spoon (5ml)">1 Spoon (5ml / 1 चम्मच)</option>
+                          <option value="2 Spoon (10ml)">2 Spoon (10ml / 2 चम्मच)</option>
+                          <option value="Half Spoon (2.5ml)">Half Spoon (2.5ml / आधा चम्मच)</option>
+                          <option value="1 Puff / Spray">1 Puff / Spray</option>
+                          <option value="2 Puff / Spray">2 Puff / Spray</option>
+                          <option value="Local Application (लेप/तेल)">Local Application (स्थानिक लेप/तेल)</option>
+                          <option value="custom">✏️ Custom / Type Value...</option>
+                        </select>
+                        {(!['15 Drops', '10 Drops', '5 Drops', '20 Drops', '1 Tab', '2 Tab', '3 Tab', '1 Cap', '2 Cap', '1 Spoon (5ml)', '2 Spoon (10ml)', 'Half Spoon (2.5ml)', '1 Puff / Spray', '2 Puff / Spray', 'Local Application (लेप/तेल)'].includes(newMed.dosage)) && (
+                          <input
+                            type="text"
+                            placeholder="Type custom dose..."
+                            value={newMed.dosage}
+                            onChange={(e) => setNewMed({ ...newMed, dosage: e.target.value })}
+                            style={{ width: '100%', marginTop: '4px', padding: '5px 8px', borderRadius: '4px', border: '1px solid #0284c7', fontSize: '11px', fontWeight: 600 }}
+                          />
+                        )}
                       </div>
 
+                      {/* Frequency Dropdown */}
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
                           Frequency
                         </label>
-                        <input
-                          type="text"
-                          placeholder="OD / BD / TDS / QID"
-                          value={newMed.frequency}
-                          onChange={(e) => setNewMed({ ...newMed, frequency: e.target.value })}
-                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                        />
+                        <select
+                          value={
+                            [
+                              'BD', 'BD (Twice Daily / दिन में 2 बार)',
+                              'OD', 'OD (Once Daily / दिन में 1 बार)',
+                              'TDS', 'TDS (Thrice Daily / दिन में 3 बार)',
+                              'QID', 'QID (4 Times Daily)',
+                              'HS', 'HS (At Bedtime / रात को सोते समय)',
+                              'SOS', 'SOS (As Needed / आवश्यकतानुसार)',
+                              'Weekly Once', 'Weekly Once (सप्ताह में 1 बार)',
+                              'Weekly Twice', 'Weekly Twice (सप्ताह में 2 बार)',
+                              'Weekly Thrice', 'Weekly Thrice (सप्ताह में 3 बार)',
+                              'Alternate Days', 'Alternate Days (एक दिन छोड़कर)',
+                              'Monthly Once', 'Monthly Once (महीने में 1 बार)',
+                              'Every 15 Days', 'Every 15 Days (15 दिन में 1 बार)'
+                            ].includes(newMed.frequency)
+                              ? newMed.frequency
+                              : 'custom'
+                          }
+                          onChange={(e) => {
+                            if (e.target.value !== 'custom') {
+                              setNewMed({ ...newMed, frequency: e.target.value });
+                            }
+                          }}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600, backgroundColor: '#ffffff', color: '#0f172a' }}
+                        >
+                          <option value="BD (Twice Daily / दिन में 2 बार)">BD (Twice Daily / दिन में 2 बार)</option>
+                          <option value="OD (Once Daily / दिन में 1 बार)">OD (Once Daily / दिन में 1 बार)</option>
+                          <option value="TDS (Thrice Daily / दिन में 3 बार)">TDS (Thrice Daily / दिन में 3 बार)</option>
+                          <option value="QID (4 Times Daily)">QID (4 Times Daily)</option>
+                          <option value="HS (At Bedtime / रात को सोते समय)">HS (At Bedtime / रात को सोते समय)</option>
+                          <option value="SOS (As Needed / आवश्यकतानुसार)">SOS (As Needed / आवश्यकतानुसार)</option>
+                          <option value="Weekly Once (सप्ताह में 1 बार)">Weekly Once (सप्ताह में 1 बार)</option>
+                          <option value="Weekly Twice (सप्ताह में 2 बार)">Weekly Twice (सप्ताह में 2 बार)</option>
+                          <option value="Weekly Thrice (सप्ताह में 3 बार)">Weekly Thrice (सप्ताह में 3 बार)</option>
+                          <option value="Alternate Days (एक दिन छोड़कर)">Alternate Days (एक दिन छोड़कर)</option>
+                          <option value="Monthly Once (महीने में 1 बार)">Monthly Once (महीने में 1 बार)</option>
+                          <option value="Every 15 Days (15 दिन में 1 बार)">Every 15 Days (15 दिन में 1 बार)</option>
+                          <option value="BD">BD (Short)</option>
+                          <option value="OD">OD (Short)</option>
+                          <option value="TDS">TDS (Short)</option>
+                          <option value="QID">QID (Short)</option>
+                          <option value="HS">HS (Short)</option>
+                          <option value="SOS">SOS (Short)</option>
+                          <option value="Weekly Once">Weekly Once (Short)</option>
+                          <option value="Weekly Twice">Weekly Twice (Short)</option>
+                          <option value="Weekly Thrice">Weekly Thrice (Short)</option>
+                          <option value="Alternate Days">Alternate Days (Short)</option>
+                          <option value="custom">✏️ Custom / Type Frequency...</option>
+                        </select>
+                        {!['BD', 'BD (Twice Daily / दिन में 2 बार)', 'OD', 'OD (Once Daily / दिन में 1 बार)', 'TDS', 'TDS (Thrice Daily / दिन में 3 बार)', 'QID', 'QID (4 Times Daily)', 'HS', 'HS (At Bedtime / रात को सोते समय)', 'SOS', 'SOS (As Needed / आवश्यकतानुसार)', 'Weekly Once', 'Weekly Once (सप्ताह में 1 बार)', 'Weekly Twice', 'Weekly Twice (सप्ताह में 2 बार)', 'Weekly Thrice', 'Weekly Thrice (सप्ताह में 3 बार)', 'Alternate Days', 'Alternate Days (एक दिन छोड़कर)', 'Monthly Once', 'Monthly Once (महीने में 1 बार)', 'Every 15 Days', 'Every 15 Days (15 दिन में 1 बार)'].includes(newMed.frequency) && (
+                          <input
+                            type="text"
+                            placeholder="Type custom frequency..."
+                            value={newMed.frequency}
+                            onChange={(e) => setNewMed({ ...newMed, frequency: e.target.value })}
+                            style={{ width: '100%', marginTop: '4px', padding: '5px 8px', borderRadius: '4px', border: '1px solid #16a34a', fontSize: '11px', fontWeight: 600 }}
+                          />
+                        )}
                       </div>
 
+                      {/* Timing / Instructions Dropdown */}
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
                           Timing / Instructions
                         </label>
-                        <input
-                          type="text"
-                          placeholder="After Food / Before Food"
-                          value={newMed.timing}
-                          onChange={(e) => setNewMed({ ...newMed, timing: e.target.value })}
-                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                        />
+                        <select
+                          value={['After Food', 'Before Food', 'Empty Stomach', 'With Warm Water', 'With Milk', 'At Bedtime'].includes(newMed.timing) ? newMed.timing : 'custom'}
+                          onChange={(e) => {
+                            if (e.target.value !== 'custom') {
+                              setNewMed({ ...newMed, timing: e.target.value });
+                            }
+                          }}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600, backgroundColor: '#ffffff', color: '#0f172a' }}
+                        >
+                          <option value="After Food">After Food (खाना खाने के बाद)</option>
+                          <option value="Before Food">Before Food (खाना खाने से पहले)</option>
+                          <option value="Empty Stomach">Empty Stomach (खाली पेट)</option>
+                          <option value="With Warm Water">With Warm Water (गुनगुने पानी के साथ)</option>
+                          <option value="With Milk">With Milk (दूध के साथ)</option>
+                          <option value="At Bedtime">At Bedtime (रात को सोते समय)</option>
+                          <option value="custom">✏️ Custom / Type Timing...</option>
+                        </select>
+                        {(!['After Food', 'Before Food', 'Empty Stomach', 'With Warm Water', 'With Milk', 'At Bedtime'].includes(newMed.timing)) && (
+                          <input
+                            type="text"
+                            placeholder="Type custom timing..."
+                            value={newMed.timing}
+                            onChange={(e) => setNewMed({ ...newMed, timing: e.target.value })}
+                            style={{ width: '100%', marginTop: '4px', padding: '5px 8px', borderRadius: '4px', border: '1px solid #6366f1', fontSize: '11px', fontWeight: 600 }}
+                          />
+                        )}
                       </div>
 
+                      {/* Duration Dropdown */}
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
                           Duration
                         </label>
-                        <input
-                          type="text"
-                          placeholder="1 Month / 15 Days"
-                          value={newMed.duration}
-                          onChange={(e) => setNewMed({ ...newMed, duration: e.target.value })}
-                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                        />
+                        <select
+                          value={['1 Month', '15 Days', '7 Days', '2 Months', '3 Months', '10 Days', 'Continue as advised'].includes(newMed.duration) ? newMed.duration : 'custom'}
+                          onChange={(e) => {
+                            if (e.target.value !== 'custom') {
+                              setNewMed({ ...newMed, duration: e.target.value });
+                            }
+                          }}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600, backgroundColor: '#ffffff', color: '#0f172a' }}
+                        >
+                          <option value="1 Month">1 Month</option>
+                          <option value="15 Days">15 Days</option>
+                          <option value="7 Days">7 Days</option>
+                          <option value="10 Days">10 Days</option>
+                          <option value="2 Months">2 Months</option>
+                          <option value="3 Months">3 Months</option>
+                          <option value="Continue as advised">Continue as advised</option>
+                          <option value="custom">✏️ Custom / Type Duration...</option>
+                        </select>
+                        {(!['1 Month', '15 Days', '7 Days', '2 Months', '3 Months', '10 Days', 'Continue as advised'].includes(newMed.duration)) && (
+                          <input
+                            type="text"
+                            placeholder="Type custom duration..."
+                            value={newMed.duration}
+                            onChange={(e) => setNewMed({ ...newMed, duration: e.target.value })}
+                            style={{ width: '100%', marginTop: '4px', padding: '5px 8px', borderRadius: '4px', border: '1px solid #0284c7', fontSize: '11px', fontWeight: 600 }}
+                          />
+                        )}
                       </div>
-                    </div>
 
-                    {/* Quick Preset Buttons */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', fontSize: '11px' }}>
-                      {/* Dose Presets */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ fontWeight: 700, color: '#64748b' }}>Quick Dose:</span>
-                        {['15 Drops', '10 Drops', '5 Drops', '1 Tab', '2 Tab'].map((d) => (
+                      {/* Add / Update Medicine Button */}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'transparent', marginBottom: 3 }}>
+                          Action
+                        </label>
+                        <div style={{ display: 'flex', gap: '6px' }}>
                           <button
-                            key={d}
                             type="button"
-                            onClick={() => setNewMed({ ...newMed, dosage: d })}
+                            onClick={addPrescribedMedicine}
                             style={{
-                              padding: '2px 7px',
-                              borderRadius: '4px',
-                              border: '1px solid #cbd5e1',
-                              backgroundColor: newMed.dosage === d ? '#0284c7' : '#ffffff',
-                              color: newMed.dosage === d ? '#ffffff' : '#334155',
-                              fontSize: '11px',
-                              fontWeight: 600,
+                              backgroundColor: editingMedId ? '#f59e0b' : '#0284c7',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '7px 16px',
+                              fontSize: '12px',
+                              fontWeight: 700,
                               cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              whiteSpace: 'nowrap',
+                              boxShadow: editingMedId ? '0 2px 4px rgba(245, 158, 11, 0.3)' : '0 2px 4px rgba(2, 132, 199, 0.25)',
+                              height: '33px',
                             }}
                           >
-                            {d}
+                            {editingMedId ? <Edit3 size={15} /> : <Plus size={15} />}
+                            {editingMedId ? 'Update Medicine' : 'Add Medicine'}
                           </button>
-                        ))}
-                      </div>
 
-                      {/* Frequency Presets */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ fontWeight: 700, color: '#64748b' }}>Quick Freq:</span>
-                        {['OD', 'BD', 'TDS', 'QID', 'HS'].map((f) => (
-                          <button
-                            key={f}
-                            type="button"
-                            onClick={() => setNewMed({ ...newMed, frequency: f })}
-                            style={{
-                              padding: '2px 7px',
-                              borderRadius: '4px',
-                              border: '1px solid #cbd5e1',
-                              backgroundColor: newMed.frequency === f ? '#16a34a' : '#ffffff',
-                              color: newMed.frequency === f ? '#ffffff' : '#334155',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {f}
-                          </button>
-                        ))}
+                          {editingMedId && (
+                            <button
+                              type="button"
+                              onClick={cancelEditMedicine}
+                              style={{
+                                backgroundColor: '#f1f5f9',
+                                color: '#475569',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                padding: '7px 12px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                height: '33px',
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       </div>
-
-                      {/* Timing Presets */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ fontWeight: 700, color: '#64748b' }}>Timing:</span>
-                        {['After Food', 'Before Food', 'Empty Stomach'].map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => setNewMed({ ...newMed, timing: t })}
-                            style={{
-                              padding: '2px 7px',
-                              borderRadius: '4px',
-                              border: '1px solid #cbd5e1',
-                              backgroundColor: newMed.timing === t ? '#6366f1' : '#ffffff',
-                              color: newMed.timing === t ? '#ffffff' : '#334155',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {t}
-                          </button>
-                        ))}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={addPrescribedMedicine}
-                        style={{
-                          marginLeft: 'auto',
-                          backgroundColor: '#0284c7',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: '6px',
-                          padding: '6px 14px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                        }}
-                      >
-                        <Plus size={14} /> Add Medicine
-                      </button>
                     </div>
                   </div>
 
@@ -1398,18 +1523,57 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                         </thead>
                         <tbody>
                           {prescribedMedicines.map((m, idx) => (
-                            <tr key={m.id || idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                            <tr
+                              key={m.id || idx}
+                              style={{
+                                borderBottom: '1px solid #e2e8f0',
+                                backgroundColor: editingMedId === m.id ? '#fef3c7' : 'transparent',
+                                transition: 'background-color 0.2s',
+                              }}
+                            >
                               <td style={{ padding: '6px 8px', fontWeight: 600, color: '#64748b' }}>{idx + 1}</td>
-                              <td style={{ padding: '6px 8px', fontWeight: 700, color: '#0f172a' }}>{m.name}</td>
+                              <td style={{ padding: '6px 8px', fontWeight: 700, color: '#0f172a' }}>
+                                {m.name}
+                                {editingMedId === m.id && (
+                                  <span style={{ marginLeft: '6px', fontSize: '9px', fontWeight: 800, backgroundColor: '#f59e0b', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>
+                                    Editing...
+                                  </span>
+                                )}
+                              </td>
                               <td style={{ padding: '6px 8px', fontWeight: 700, color: '#0284c7' }}>{m.dosage}</td>
                               <td style={{ padding: '6px 8px', fontWeight: 700, color: '#16a34a' }}>{m.frequency}</td>
                               <td style={{ padding: '6px 8px', color: '#475569' }}>{m.timing}</td>
                               <td style={{ padding: '6px 8px', color: '#475569' }}>{m.duration}</td>
-                              <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                              <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                {/* Edit Button (Doctor & Admin) */}
+                                {['admin', 'manager', 'doctor'].includes(user?.role) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditMedicine(m)}
+                                    title="Edit Medicine"
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: editingMedId === m.id ? '#f59e0b' : '#0284c7',
+                                      cursor: 'pointer',
+                                      padding: '4px 6px',
+                                      borderRadius: '4px',
+                                      marginRight: '4px',
+                                    }}
+                                  >
+                                    <Edit3 size={15} />
+                                  </button>
+                                )}
+
+                                {/* Delete Button */}
                                 <button
                                   type="button"
-                                  onClick={() => removePrescribedMedicine(m.id)}
-                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                                  onClick={() => {
+                                    if (editingMedId === m.id) cancelEditMedicine();
+                                    removePrescribedMedicine(m.id);
+                                  }}
+                                  title="Remove Medicine"
+                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px 6px' }}
                                 >
                                   <Trash2 size={15} />
                                 </button>
