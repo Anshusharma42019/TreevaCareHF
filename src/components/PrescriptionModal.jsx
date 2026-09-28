@@ -334,17 +334,62 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
   useEffect(() => {
     if (!isOpen) return;
 
-    // Dynamically set doctor name based on patient record or currently logged in doctor/user
-    let docName = patientData?.doctorName || patientData?.doctor_name || patientData?.doctor || patientData?.createdBy?.name;
-    if (!docName) {
-      if (user?.name) {
-        docName = user.name.trim().toLowerCase().startsWith('dr') ? user.name : `Dr. ${user.name}`;
+    const getAssignedDoctorName = (data) => {
+      if (!data) return null;
+      if (typeof data.doctorName === 'string' && data.doctorName.trim() && !data.doctorName.toLowerCase().includes('admin')) {
+        return data.doctorName.trim();
+      }
+      if (typeof data.doctor_name === 'string' && data.doctor_name.trim() && !data.doctor_name.toLowerCase().includes('admin')) {
+        return data.doctor_name.trim();
+      }
+      if (data.assignedDoctor) {
+        const d = typeof data.assignedDoctor === 'object' ? data.assignedDoctor.name : data.assignedDoctor;
+        if (d && typeof d === 'string' && !d.toLowerCase().includes('admin')) return d;
+      }
+      if (data.doctor) {
+        const d = typeof data.doctor === 'object' ? data.doctor.name : data.doctor;
+        if (d && typeof d === 'string' && !d.toLowerCase().includes('admin')) return d;
+      }
+      if (data.lead && typeof data.lead === 'object') {
+        const fromLead = getAssignedDoctorName(data.lead);
+        if (fromLead) return fromLead;
+      }
+      if (data.task && typeof data.task === 'object') {
+        const fromTask = getAssignedDoctorName(data.task);
+        if (fromTask) return fromTask;
+      }
+      if (data.raw && typeof data.raw === 'object') {
+        const fromRaw = getAssignedDoctorName(data.raw);
+        if (fromRaw) return fromRaw;
+      }
+      if (data.createdBy && typeof data.createdBy === 'object') {
+        if (data.createdBy.role === 'doctor' || data.createdBy.specialization) {
+          return data.createdBy.name;
+        }
+      }
+      return null;
+    };
+
+    const formatDocTitle = (name) => {
+      if (!name || typeof name !== 'string') return DEFAULT_CLINIC.doctorName;
+      const trimmed = name.trim();
+      if (trimmed.toLowerCase().startsWith('dr.') || trimmed.toLowerCase().startsWith('dr ')) {
+        return trimmed;
+      }
+      return `Dr. ${trimmed}`;
+    };
+
+    let foundDoc = getAssignedDoctorName(patientData);
+    if (!foundDoc) {
+      if (user?.role === 'doctor' && user?.name) {
+        foundDoc = user.name;
       } else {
-        docName = DEFAULT_CLINIC.doctorName;
+        foundDoc = DEFAULT_CLINIC.doctorName;
       }
     }
 
-    let docDegree = patientData?.doctorDegree || user?.specialization || DEFAULT_CLINIC.doctorDegree;
+    let docName = formatDocTitle(foundDoc);
+    let docDegree = patientData?.doctorDegree || (user?.role === 'doctor' ? user?.specialization : null) || DEFAULT_CLINIC.doctorDegree;
 
     setClinic((prev) => ({
       ...prev,
@@ -436,54 +481,145 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
 
       applyDepartmentPreset(targetDept, !!patientData.problem);
 
-      const verifierVal =
-        (typeof patientData.verifiedBy === 'object' ? patientData.verifiedBy?.name : patientData.verifiedBy) ||
-        (typeof patientData.verified_by === 'object' ? patientData.verified_by?.name : patientData.verified_by) ||
-        patientData.verifiedByName ||
-        patientData.verifierName ||
-        (typeof patientData.assignedTo === 'object' ? patientData.assignedTo?.name : patientData.assignedTo) ||
-        patientData.lead?.assignedTo?.name ||
-        patientData.lead?.createdBy?.name ||
-        patientData.task?.assignedTo?.name ||
-        patientData.createdBy?.name ||
-        patientData.created_by?.name ||
-        patientData.staffName ||
-        (user?.role !== 'doctor' && user?.name ? user.name : '') ||
-        '';
+    const isMongoId = (val) => typeof val === 'string' && /^[0-9a-fA-F]{24}$/.test(val.trim());
+
+    const extractRawUserId = (obj) => {
+      if (!obj) return null;
+      let raw = obj.verifiedBy || obj.verified_by || obj.assignedTo || obj.createdBy;
+      if (typeof raw === 'string' && isMongoId(raw)) return raw.trim();
+      if (typeof raw === 'object' && raw?._id && isMongoId(raw._id)) return String(raw._id);
+      if (obj.verification && typeof obj.verification === 'object') {
+        let r = extractRawUserId(obj.verification);
+        if (r) return r;
+      }
+      if (obj.lead && typeof obj.lead === 'object') {
+        let r = extractRawUserId(obj.lead);
+        if (r) return r;
+      }
+      if (obj.task && typeof obj.task === 'object') {
+        let r = extractRawUserId(obj.task);
+        if (r) return r;
+      }
+      return null;
+    };
+
+    const getVerifierName = (obj) => {
+      if (!obj) return null;
+
+      const clean = (v, strict = true) => {
+        if (!v) return null;
+        let name = null;
+        let role = null;
+        if (typeof v === 'object') {
+          name = v.name;
+          role = v.role;
+        } else if (typeof v === 'string' && !isMongoId(v)) {
+          name = v.trim();
+        }
+        if (!name || typeof name !== 'string' || isMongoId(name)) return null;
+        if (strict) {
+          const lower = name.toLowerCase();
+          if (lower.includes('admin') || role === 'doctor' || lower.startsWith('dr.') || lower.startsWith('dr ')) {
+            return null;
+          }
+        }
+        return name.trim();
+      };
+
+      const searchObj = (o, strict) => {
+        if (!o || typeof o !== 'object') return null;
+
+        // 1. Explicit verifiedBy / verifierName
+        let n = clean(o.verifiedBy, strict) || clean(o.verified_by, strict) || clean(o.verifiedByName, strict) || clean(o.verifierName, strict);
+        if (n) return n;
+
+        // 2. Verification sub-record
+        if (o.verification && typeof o.verification === 'object') {
+          n = searchObj(o.verification, strict);
+          if (n) return n;
+        }
+
+        // 3. Lead sub-record assignedTo / createdBy (the closer who submitted verification)
+        if (o.lead && typeof o.lead === 'object') {
+          n = clean(o.lead.assignedTo, strict) || clean(o.lead.createdBy, strict);
+          if (n) return n;
+        }
+
+        // 4. Task sub-record assignedTo / createdBy
+        if (o.task && typeof o.task === 'object') {
+          n = clean(o.task.assignedTo, strict) || clean(o.task.createdBy, strict);
+          if (n) return n;
+        }
+
+        // 5. Direct assignedTo / createdBy / staffName
+        n = clean(o.assignedTo, strict) || clean(o.createdBy, strict) || clean(o.staffName, strict);
+        if (n) return n;
+
+        return null;
+      };
+
+      // Pass 1: Strict search for sales/support/verification staff (excluding doctor & admin)
+      let name = searchObj(obj, true);
+      if (name) return name;
+
+      // Pass 2: Fallback search if no non-doctor staff name found
+      return searchObj(obj, false);
+    };
+
+    const verifierVal = getVerifierName(patientData) || '';
+
+    setPatientInfo((prev) => ({
+      ...prev,
+      name: patientData.patientName || patientData.billing_customer_name || patientData.customer_name || patientData.name || 'Patient',
+      mobile: patientData.mobile || patientData.billing_phone || patientData.phone_number || patientData.phone || '',
+      pid: cleanPid,
+      prescriptionId: patientData.prescriptionId || `${randomPrescId} (${(patientData.state || 'INDIA').toUpperCase()})`,
+      amount: patientData.amount ? `₹${patientData.amount} (${patientData.payment_type || patientData.paymentMethod || 'cod'})` : patientData.sub_total ? `₹${patientData.sub_total} (cod)` : '',
+      verifierName: verifierVal,
+    }));
+
+    const cleanMobile = (patientData.mobile || patientData.billing_phone || patientData.phone_number || patientData.phone || '').replace(/\D/g, '').slice(-10);
+
+    const fetchUserByIdIfRaw = (rawId) => {
+      if (!rawId || !isMongoId(rawId)) return;
+      API.get(`/users/${rawId}`)
+        .then((res) => {
+          const u = res.data?.data || res.data;
+          if (u?.name && !isMongoId(u.name)) {
+            setPatientInfo((prev) => ({ ...prev, verifierName: u.name }));
+          }
+        })
+        .catch(() => {});
+    };
+
+    const applyVitals = (obj) => {
+      if (!obj) return;
+      const a = obj.age ?? obj.lead?.age;
+      const w = obj.weight ?? obj.lead?.weight;
+      const g = obj.gender ?? obj.lead?.gender ?? obj.sex;
+      const m = obj.maritalStatus ?? obj.marriedStatus ?? obj.marital_status ?? obj.marital ?? obj.lead?.maritalStatus ?? obj.lead?.marriedStatus;
+      const p = obj.occupation ?? obj.profession ?? obj.lead?.occupation;
+      const s = obj.problemDuration ?? obj.since ?? obj.duration ?? obj.lead?.problemDuration;
+      const t = obj.problem ?? obj.disease ?? obj.treatingFor ?? obj.lead?.problem;
+      const verifier = getVerifierName(obj);
 
       setPatientInfo((prev) => ({
         ...prev,
-        name: patientData.patientName || patientData.billing_customer_name || patientData.customer_name || patientData.name || 'Patient',
-        mobile: patientData.mobile || patientData.billing_phone || patientData.phone_number || patientData.phone || '',
-        pid: cleanPid,
-        prescriptionId: patientData.prescriptionId || `${randomPrescId} (${(patientData.state || 'INDIA').toUpperCase()})`,
-        amount: patientData.amount ? `₹${patientData.amount} (${patientData.payment_type || patientData.paymentMethod || 'cod'})` : patientData.sub_total ? `₹${patientData.sub_total} (cod)` : '',
-        verifierName: verifierVal,
+        age: (a !== undefined && a !== null && a !== '' && a !== '-') ? String(a) : prev.age,
+        weight: (w !== undefined && w !== null && w !== '' && w !== '-') ? String(w) : prev.weight,
+        gender: (g !== undefined && g !== null && g !== '' && g !== '-') ? String(g) : prev.gender,
+        marriedStatus: (m !== undefined && m !== null && m !== '' && m !== '-') ? String(m) : prev.marriedStatus,
+        profession: (p !== undefined && p !== null && p !== '' && p !== '-') ? String(p) : prev.profession,
+        since: (s !== undefined && s !== null && s !== '' && s !== '-') ? String(s) : prev.since,
+        treatingFor: (t !== undefined && t !== null && t !== '' && t !== '-') ? String(t) : prev.treatingFor,
+        verifierName: verifier || prev.verifierName,
       }));
 
-      const cleanMobile = (patientData.mobile || patientData.billing_phone || patientData.phone_number || patientData.phone || '').replace(/\D/g, '').slice(-10);
-
-      const applyVitals = (obj) => {
-        if (!obj) return;
-        const a = obj.age ?? obj.lead?.age;
-        const w = obj.weight ?? obj.lead?.weight;
-        const g = obj.gender ?? obj.lead?.gender ?? obj.sex;
-        const m = obj.maritalStatus ?? obj.marriedStatus ?? obj.marital_status ?? obj.marital ?? obj.lead?.maritalStatus ?? obj.lead?.marriedStatus;
-        const p = obj.occupation ?? obj.profession ?? obj.lead?.occupation;
-        const s = obj.problemDuration ?? obj.since ?? obj.duration ?? obj.lead?.problemDuration;
-        const t = obj.problem ?? obj.disease ?? obj.treatingFor ?? obj.lead?.problem;
-
-        setPatientInfo((prev) => ({
-          ...prev,
-          age: (a !== undefined && a !== null && a !== '' && a !== '-') ? String(a) : prev.age,
-          weight: (w !== undefined && w !== null && w !== '' && w !== '-') ? String(w) : prev.weight,
-          gender: (g !== undefined && g !== null && g !== '' && g !== '-') ? String(g) : prev.gender,
-          marriedStatus: (m !== undefined && m !== null && m !== '' && m !== '-') ? String(m) : prev.marriedStatus,
-          profession: (p !== undefined && p !== null && p !== '' && p !== '-') ? String(p) : prev.profession,
-          since: (s !== undefined && s !== null && s !== '' && s !== '-') ? String(s) : prev.since,
-          treatingFor: (t !== undefined && t !== null && t !== '' && t !== '-') ? String(t) : prev.treatingFor,
-        }));
-      };
+      if (!verifier) {
+        const rawId = extractRawUserId(obj);
+        if (rawId) fetchUserByIdIfRaw(rawId);
+      }
+    };
 
       // 1. Initial apply from patientData & populated lead/raw objects
       applyVitals(patientData.lead || patientData.lead_id || patientData.raw?.lead);
@@ -531,6 +667,14 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
               if (Array.isArray(pData.prescribedMedicines) && pData.prescribedMedicines.length > 0) {
                 setPrescribedMedicines(pData.prescribedMedicines);
               }
+              const savedDoc = getAssignedDoctorName(pData) || (pData.doctorName && !pData.doctorName.toLowerCase().includes('admin') ? pData.doctorName : null);
+              if (savedDoc) {
+                setClinic((prev) => ({
+                  ...prev,
+                  doctorName: formatDocTitle(savedDoc),
+                  doctorDegree: pData.doctorDegree || prev.doctorDegree,
+                }));
+              }
               applyVitals(pData);
             }
           })
@@ -542,6 +686,13 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
         API.get(`/verification/${targetId}`)
           .then((res) => {
             const v = res.data?.data || res.data;
+            const verifDoc = getAssignedDoctorName(v);
+            if (verifDoc) {
+              setClinic((prev) => ({
+                ...prev,
+                doctorName: formatDocTitle(verifDoc),
+              }));
+            }
             applyVitals(v);
           })
           .catch(() => {});
@@ -552,6 +703,13 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
         API.get(`/leads/${leadId}`)
           .then((res) => {
             const l = res.data?.data || res.data;
+            const leadDoc = getAssignedDoctorName(l);
+            if (leadDoc) {
+              setClinic((prev) => ({
+                ...prev,
+                doctorName: formatDocTitle(leadDoc),
+              }));
+            }
             applyVitals(l);
           })
           .catch(() => {});
@@ -564,6 +722,13 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
             const list = res.data?.data || res.data;
             if (Array.isArray(list) && list.length > 0) {
               const foundLead = list.find((item) => item.age || item.weight || item.occupation || item.problemDuration) || list[0];
+              const phoneLeadDoc = getAssignedDoctorName(foundLead);
+              if (phoneLeadDoc) {
+                setClinic((prev) => ({
+                  ...prev,
+                  doctorName: formatDocTitle(phoneLeadDoc),
+                }));
+              }
               applyVitals(foundLead);
             }
           })
@@ -1431,7 +1596,7 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                     Amount : <strong>{patientInfo.amount}</strong>
                   </div>
                   <div style={{ fontSize: '11px', color: '#334155' }}>
-                    ID : <strong>{patientInfo.prescriptionId}</strong>{patientInfo.verifierName ? ` | ${patientInfo.verifierName}` : ''} | {clinic.doctorName}
+                    ID : <strong>{patientInfo.prescriptionId}</strong>{patientInfo.verifierName ? ` | ${patientInfo.verifierName}` : ''}
                   </div>
                 </div>
 

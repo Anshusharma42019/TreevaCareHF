@@ -246,8 +246,6 @@ export default function Verification() {
     }
   }, [canManage]);
 
-
-
   const flattenRecord = (r) => {
     const taskData = r.task && typeof r.task === 'object' ? r.task : {};
     // Exclude fields that are already populated on the verification record itself
@@ -429,9 +427,7 @@ export default function Verification() {
     const idx = [...records, ...onHoldRecords].findIndex(r => r._id === id);
     return PIN_COLORS[Math.max(0, idx) % PIN_COLORS.length];
   };
-
-
-
+  
   return (
     <div className="flex gap-4 scroll-container-h overflow-hidden animate-slide-up mobile-p-safe">
       {/* ── LEFT PANEL ── */}

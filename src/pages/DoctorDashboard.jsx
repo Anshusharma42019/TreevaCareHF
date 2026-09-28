@@ -51,6 +51,12 @@ export default function DoctorDashboard() {
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
   const [apptTab, setApptTab] = useState('active'); // 'active' | 'completed' | 'all'
   const [dispatchTab, setDispatchTab] = useState('active'); // 'active' | 'completed' | 'all'
+  const [rxTypeFilter, setRxTypeFilter] = useState('all'); // 'all' | 'shipmaxx' | 'rts'
+  const [rxDateFilter, setRxDateFilter] = useState('all'); // 'all' | 'today' | 'yesterday' | '7days' | '30days' | 'custom'
+  const [rxCustomDate, setRxCustomDate] = useState('');
+  const [rxSearchQuery, setRxSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState('all'); // 'all' | 'today' | 'yesterday' | '7days' | '30days' | 'custom'
+  const [customDate, setCustomDate] = useState('');
   const [completedDispatchIds, setCompletedDispatchIds] = useState(() => {
     try {
       const saved = localStorage.getItem('doctor_completed_dispatches');
@@ -60,13 +66,21 @@ export default function DoctorDashboard() {
     }
   });
 
-  const userDepts = (
+  const rawUserDepts = (
     user?.departments?.length
       ? user.departments
       : user?.department
       ? [user.department]
       : []
   ).map((d) => String(d).toLowerCase());
+
+  const userDepts = [];
+  rawUserDepts.forEach((ud) => {
+    userDepts.push(ud);
+    if (ud.includes('male') || ud.includes('sperm')) userDepts.push('male');
+    if (ud.includes('skin') || ud.includes('derma') || ud.includes('acne')) userDepts.push('skin');
+    if (ud.includes('ortho') || ud.includes('joint') || ud.includes('spine')) userDepts.push('ortho');
+  });
 
   const isFullAccessUser = ['admin', 'manager'].includes(user?.role);
   const defaultDept = !isFullAccessUser && userDepts.length > 0 ? userDepts[0] : 'all';
@@ -143,12 +157,18 @@ export default function DoctorDashboard() {
     loadDashboardData();
   }, [loadDashboardData]);
 
-  const handleCompleteAppointment = async (apptId, e) => {
+  const handleCompleteAppointment = async (apptId, item, e) => {
     if (e) e.stopPropagation();
     setUpdatingStatusId(apptId);
     try {
-      await updateAppointment(apptId, { status: 'completed' });
-      success('Appointment marked as completed!');
+      if (item?.type === 'appointment') {
+        await updateAppointment(apptId, { status: 'completed' }).catch(() => {});
+      }
+      const idStr = String(apptId);
+      const updated = [...new Set([...completedDispatchIds, idStr])];
+      setCompletedDispatchIds(updated);
+      localStorage.setItem('doctor_completed_dispatches', JSON.stringify(updated));
+      success('Patient consultation marked as completed!');
       loadDashboardData();
     } catch (err) {
       error(err?.response?.data?.message || 'Failed to complete appointment');
@@ -159,14 +179,24 @@ export default function DoctorDashboard() {
 
   const handleCompleteDispatch = async (dispatchItem, e) => {
     if (e) e.stopPropagation();
-    const idStr = String(dispatchItem.id || dispatchItem._id);
-    const updated = [...new Set([...completedDispatchIds, idStr])];
+    const idStr = String(dispatchItem.id || dispatchItem._id || '');
+    const rawIdStr = dispatchItem.raw?._id ? String(dispatchItem.raw._id) : null;
+    const rawOrderIdStr = dispatchItem.raw?.order_id ? String(dispatchItem.raw.order_id) : null;
+
+    const idsToAdd = [idStr, rawIdStr, rawOrderIdStr].filter(Boolean);
+    const updated = [...new Set([...completedDispatchIds, ...idsToAdd])];
     setCompletedDispatchIds(updated);
     try {
       localStorage.setItem('doctor_completed_dispatches', JSON.stringify(updated));
-      if (dispatchItem.type === 'shipmaxx') {
-        await smxSvc.completeFollowUp(dispatchItem.id, { notes: 'Marked completed from Doctor Dashboard' }).catch(() => {});
+      await smxSvc.completeFollowUp(idStr, { notes: 'Marked completed from Doctor Dashboard' }).catch(() => {});
+      if (rawIdStr && rawIdStr !== idStr) {
+        await smxSvc.completeFollowUp(rawIdStr, { notes: 'Marked completed from Doctor Dashboard' }).catch(() => {});
       }
+      await API.patch(`/ready-to-shipment/${idStr}`, { status: 'completed', is_completed: true, completed: true }).catch(() => {});
+      if (rawIdStr && rawIdStr !== idStr) {
+        await API.patch(`/ready-to-shipment/${rawIdStr}`, { status: 'completed', is_completed: true, completed: true }).catch(() => {});
+      }
+      await loadDashboardData();
     } catch (err) {
       console.error(err);
     }
@@ -196,13 +226,47 @@ export default function DoctorDashboard() {
     return oDate && oDate.toString().slice(0, 10) === todayStr;
   });
 
+  const matchesDate = (rawDate, mode, customVal) => {
+    if (!mode || mode === 'all') return true;
+    if (!rawDate) return false;
+
+    const d = new Date(rawDate);
+    if (isNaN(d.getTime())) return false;
+
+    const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+    const itemISTDate = new Date(d.getTime() + IST_OFFSET).toISOString().split('T')[0];
+
+    const nowIST = new Date(Date.now() + IST_OFFSET);
+    const todayISTStr = nowIST.toISOString().split('T')[0];
+    const yesterdayISTStr = new Date(nowIST.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    if (mode === 'today') {
+      return itemISTDate === todayISTStr;
+    }
+    if (mode === 'yesterday') {
+      return itemISTDate === yesterdayISTStr;
+    }
+    if (mode === '7days') {
+      const sevenDaysAgo = new Date(nowIST.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      return itemISTDate >= sevenDaysAgo && itemISTDate <= todayISTStr;
+    }
+    if (mode === '30days') {
+      const thirtyDaysAgo = new Date(nowIST.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      return itemISTDate >= thirtyDaysAgo && itemISTDate <= todayISTStr;
+    }
+    if (mode === 'custom' && customVal) {
+      return itemISTDate === customVal;
+    }
+    return true;
+  };
+
   const matchesDept = (item, targetDept) => {
-    // 1. Strict Department Access Control for Non-Admin / Non-Manager Users
+    const target = (targetDept || 'all').toLowerCase().trim();
+
+    // 1. Department Access Control for Non-Admin / Non-Manager Users
     if (!isFullAccessUser) {
-      if (userDepts.length === 0) {
-        // Doctor has NO department permissions granted by Admin!
-        return false;
-      }
+      if (userDepts.length === 0) return false;
+
       const directDept = (
         item.department ||
         item.dept ||
@@ -226,22 +290,27 @@ export default function DoctorDashboard() {
         ''
       ).toLowerCase();
 
-      let detectedDept = directDept;
-      if (!detectedDept || !['male', 'skin', 'ortho'].includes(detectedDept)) {
+      let detectedDept = '';
+      if (directDept.includes('male') || directDept.includes('sperm')) detectedDept = 'male';
+      else if (directDept.includes('skin') || directDept.includes('derma') || directDept.includes('acne')) detectedDept = 'skin';
+      else if (directDept.includes('ortho') || directDept.includes('joint') || directDept.includes('spine')) detectedDept = 'ortho';
+
+      if (!detectedDept) {
         if (itemText.includes('ortho') || itemText.includes('joint') || itemText.includes('spine') || itemText.includes('knee') || itemText.includes('bone') || itemText.includes('back pain') || itemText.includes('arthritis')) detectedDept = 'ortho';
         else if (itemText.includes('skin') || itemText.includes('acne') || itemText.includes('derma') || itemText.includes('eczema') || itemText.includes('psoriasis') || itemText.includes('fungal') || itemText.includes('itching')) detectedDept = 'skin';
         else if (itemText.includes('male') || itemText.includes('sperm') || itemText.includes('erect') || itemText.includes('timing') || itemText.includes('semen') || itemText.includes('libido') || itemText.includes('testosterone') || itemText.includes('sexual') || itemText.includes('ejaculation')) detectedDept = 'male';
-        else detectedDept = 'male'; // Default fallback department for ambiguous medical items
+        else detectedDept = 'male';
       }
 
-      // If this item belongs to a department that this doctor is NOT assigned to, reject it!
-      if (!userDepts.includes(detectedDept)) {
+      const hasPermission = userDepts.some((ud) => ud === detectedDept || ud.includes(detectedDept) || detectedDept.includes(ud));
+      if (!hasPermission) {
         return false;
       }
     }
 
     // 2. Department Tab Filtering
-    if (!targetDept || targetDept === 'all') return true;
+    if (!target || target === 'all') return true;
+
     const directDept = (
       item.department ||
       item.dept ||
@@ -251,23 +320,33 @@ export default function DoctorDashboard() {
       ''
     ).toLowerCase().trim();
 
-    if (directDept) {
-      return directDept === targetDept.toLowerCase().trim();
+    const itemText = (
+      item.problem ||
+      item.purpose ||
+      item.disease ||
+      item.condition ||
+      item.title ||
+      item.description ||
+      item.raw?.problem ||
+      item.lead?.problem ||
+      item.task?.problem ||
+      ''
+    ).toLowerCase();
+
+    if (target === 'male') {
+      return directDept.includes('male') || directDept.includes('sperm') || itemText.includes('male') || itemText.includes('sperm') || itemText.includes('erect') || itemText.includes('ed') || itemText.includes('timing') || itemText.includes('semen');
     }
-    const itemText = (item.problem || item.purpose || item.disease || item.condition || '').toLowerCase();
-    if (targetDept === 'male') {
-      return itemText.includes('male') || itemText.includes('sperm') || itemText.includes('erect') || itemText.includes('ed');
+    if (target === 'skin') {
+      return directDept.includes('skin') || directDept.includes('derma') || itemText.includes('skin') || itemText.includes('acne') || itemText.includes('derma') || itemText.includes('eczema') || itemText.includes('psoriasis');
     }
-    if (targetDept === 'ortho') {
-      return itemText.includes('ortho') || itemText.includes('joint') || itemText.includes('spine') || itemText.includes('knee');
+    if (target === 'ortho') {
+      return directDept.includes('ortho') || directDept.includes('joint') || directDept.includes('spine') || itemText.includes('ortho') || itemText.includes('joint') || itemText.includes('spine') || itemText.includes('knee') || itemText.includes('pain');
     }
-    if (targetDept === 'skin') {
-      return itemText.includes('skin') || itemText.includes('acne') || itemText.includes('derma') || itemText.includes('eczema') || itemText.includes('psoriasis');
-    }
-    return itemText.includes(targetDept);
+
+    return directDept.includes(target) || itemText.includes(target);
   };
 
-  // Display only real booked appointments in Current Appointments & Patients table
+  // 1. Current Appointments & Patients (Strictly booked appointments)
   const displayAppointments = safeAppointments.map((a) => ({
     _id: a._id || a.id,
     patientName: a.patientName || a.name || a.leadName || 'Appointment Patient',
@@ -286,22 +365,41 @@ export default function DoctorDashboard() {
   // Sort by appointment date / creation date descending
   displayAppointments.sort((a, b) => new Date(b.createdAt || Date.now()) - new Date(a.createdAt || Date.now()));
 
-  const deptFilteredAppointments = displayAppointments.filter((a) => matchesDept(a, selectedDept));
-  const activeAppointments = deptFilteredAppointments.filter((a) => a.status !== 'completed');
-  const completedAppointments = deptFilteredAppointments.filter((a) => a.status === 'completed');
+  const dateFilteredAppointments = displayAppointments.filter((a) => matchesDate(a.createdAt, dateFilter, customDate));
+  const deptFilteredAppointments = dateFilteredAppointments.filter((a) => matchesDept(a, selectedDept));
+
+  const activeAppointments = deptFilteredAppointments.filter((a) => {
+    const isBackendCompleted = a.status === 'completed' || a.status === 'delivered';
+    const isLocalCompleted = completedDispatchIds.includes(String(a._id));
+    return !isBackendCompleted && !isLocalCompleted;
+  });
+
+  const completedAppointments = deptFilteredAppointments.filter((a) => {
+    return completedDispatchIds.includes(String(a._id)) || a.status === 'completed' || a.status === 'delivered';
+  });
 
   const filteredAppointments =
-    apptTab === 'active' ? activeAppointments :
-    apptTab === 'completed' ? completedAppointments :
-    deptFilteredAppointments;
+    apptTab === 'completed' ? completedAppointments : activeAppointments;
 
-  // 2. Dynamic Dispatches & Prescriptions from ShipMaxx Booked Orders ONLY (only after Ship via ShipMaxx)
-  const dispatchRecordsPool = todaySmx.length > 0 ? todaySmx : safeSmx;
+  // 2. Dynamic Dispatches & Prescriptions from ShipMaxx / RTS Booked Orders
+  const dispatchRecordsPool = safeSmx.length > 0 ? safeSmx : safeRts;
 
   const combinedDispatchList = [
     ...dispatchRecordsPool.map((item) => {
       const vDate = new Date(item.createdAt || Date.now());
       const isSmx = item.sub_total !== undefined || item.order_id !== undefined;
+
+      const vName =
+        (typeof item.verifiedBy === 'object' ? item.verifiedBy?.name : item.verifiedBy) ||
+        (typeof item.verified_by === 'object' ? item.verified_by?.name : item.verified_by) ||
+        (typeof item.assignedTo === 'object' ? item.assignedTo?.name : item.assignedTo) ||
+        (typeof item.lead?.assignedTo === 'object' ? item.lead?.assignedTo?.name : item.lead?.assignedTo) ||
+        item.lead?.createdBy?.name ||
+        item.task?.assignedTo?.name ||
+        item.createdBy?.name ||
+        item.verifierName ||
+        '';
+
       return {
         id: item.order_id || item._id,
         dateDay: String(vDate.getDate()).padStart(2, '0'),
@@ -313,6 +411,10 @@ export default function DoctorDashboard() {
         department: item.department || item.lead?.department,
         type: isSmx ? 'shipmaxx' : 'rts',
         amount: item.sub_total || item.price || 0,
+        verifierName: typeof vName === 'string' ? vName : '',
+        verifiedBy: item.verifiedBy || item.verified_by || item.assignedTo || item.lead?.assignedTo,
+        doctorName: item.doctorName || item.doctor || item.createdBy?.name,
+        assignedTo: item.assignedTo || item.lead?.assignedTo,
         raw: item,
         createdAt: item.createdAt,
       };
@@ -322,14 +424,56 @@ export default function DoctorDashboard() {
   // Sort by creation date descending
   combinedDispatchList.sort((a, b) => new Date(b.createdAt || Date.now()) - new Date(a.createdAt || Date.now()));
 
-  const deptFilteredDispatches = combinedDispatchList.filter((d) => matchesDept(d, selectedDept));
-  const activeDispatches = deptFilteredDispatches.filter((d) => !completedDispatchIds.includes(String(d.id)) && d.status !== 'completed' && d.status !== 'delivered');
-  const completedDispatches = deptFilteredDispatches.filter((d) => completedDispatchIds.includes(String(d.id)) || d.status === 'completed' || d.status === 'delivered');
+  const typeFilteredDispatches = combinedDispatchList.filter((d) => {
+    if (rxTypeFilter === 'shipmaxx') return d.type === 'shipmaxx';
+    if (rxTypeFilter === 'rts') return d.type === 'rts';
+    return true;
+  });
+
+  const searchFilteredDispatches = typeFilteredDispatches.filter((d) => {
+    if (!rxSearchQuery.trim()) return true;
+    const q = rxSearchQuery.toLowerCase().trim();
+    return (
+      (d.name && d.name.toLowerCase().includes(q)) ||
+      (d.mobile && d.mobile.includes(q)) ||
+      (d.condition && d.condition.toLowerCase().includes(q)) ||
+      (d.verifierName && d.verifierName.toLowerCase().includes(q)) ||
+      (d.doctorName && d.doctorName.toLowerCase().includes(q)) ||
+      (d.id && String(d.id).toLowerCase().includes(q))
+    );
+  });
+
+  const dateFilteredDispatches = searchFilteredDispatches.filter((d) => {
+    const activeDateFilter = rxDateFilter !== 'all' ? rxDateFilter : dateFilter;
+    const activeCustomDate = rxDateFilter !== 'all' ? rxCustomDate : customDate;
+    return matchesDate(d.createdAt, activeDateFilter, activeCustomDate);
+  });
+  const deptFilteredDispatches = dateFilteredDispatches.filter((d) => matchesDept(d, selectedDept));
+  const isCompletedDispatch = (d) => {
+    const raw = d.raw || {};
+    const dStatus = (d.status || raw.status || '').toLowerCase();
+    const isBackendCompleted =
+      dStatus === 'completed' ||
+      dStatus === 'delivered' ||
+      raw.is_completed === true ||
+      raw.completed === true ||
+      raw.followup_done === true;
+    const isLocalCompleted =
+      completedDispatchIds.includes(String(d.id)) ||
+      completedDispatchIds.includes(String(raw._id)) ||
+      completedDispatchIds.includes(String(raw.order_id));
+    return isBackendCompleted || isLocalCompleted;
+  };
+
+  const activeDispatches = deptFilteredDispatches.filter((d) => !isCompletedDispatch(d));
+  const completedDispatches = deptFilteredDispatches.filter((d) => isCompletedDispatch(d));
 
   const filteredDispatches =
-    dispatchTab === 'active' ? activeDispatches :
-    dispatchTab === 'completed' ? completedDispatches :
-    deptFilteredDispatches;
+    dispatchTab === 'completed'
+      ? completedDispatches
+      : dispatchTab === 'active'
+      ? activeDispatches
+      : deptFilteredDispatches;
 
   const upcomingFollowups = filteredDispatches.slice(0, 20);
 
@@ -420,17 +564,18 @@ export default function DoctorDashboard() {
         </div>
       </div>
 
-      {/* ── Department Filter Tabs (Male | Skin | Ortho) ─────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-2 bg-white/80 backdrop-blur-md rounded-2xl border border-gray-100 shadow-sm">
+      {/* ── Department & Date Filter Controls ─────────────────────────── */}
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-3 bg-white/80 backdrop-blur-md rounded-2xl border border-gray-100 shadow-sm">
+        {/* Department Filter Tabs */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider px-2">
-            Filter Department:
+          <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider px-1">
+            Department:
           </span>
           {[
-            { id: 'all', label: '🌐 All Departments' },
-            { id: 'male', label: '👨‍⚕️ Male Health' },
-            { id: 'skin', label: '✨ Skin Care' },
-            { id: 'ortho', label: '🦴 Ortho Care' },
+            { id: 'all', label: '🌐 All' },
+            { id: 'male', label: '👨‍⚕️ Male' },
+            { id: 'skin', label: '✨ Skin' },
+            { id: 'ortho', label: '🦴 Ortho' },
           ].filter((d) => {
             if (isFullAccessUser) return true;
             if (d.id === 'all') return userDepts.length > 1;
@@ -440,21 +585,60 @@ export default function DoctorDashboard() {
               key={d.id}
               type="button"
               onClick={() => setSelectedDept(d.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 selectedDept === d.id
                   ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 font-black'
-                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-gray-200/60'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/60'
               }`}
             >
               <span>{d.label}</span>
             </button>
           ))}
         </div>
-        {selectedDept !== 'all' && (
-          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
-            Filtered: {selectedDept.toUpperCase()} Department
+
+        {/* Date Wise Filter Controls */}
+        <div className="flex items-center gap-2 flex-wrap border-t lg:border-t-0 pt-2 lg:pt-0 border-gray-100">
+          <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider px-1">
+            📅 Date Wise Filter:
           </span>
-        )}
+          {[
+            { id: 'all', label: 'All Dates' },
+            { id: 'today', label: 'Today' },
+            { id: 'yesterday', label: 'Yesterday' },
+            { id: '7days', label: 'Last 7 Days' },
+            { id: '30days', label: 'Last 30 Days' },
+          ].map((df) => (
+            <button
+              key={df.id}
+              type="button"
+              onClick={() => {
+                setDateFilter(df.id);
+                setCustomDate('');
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                dateFilter === df.id
+                  ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-black'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/60'
+              }`}
+            >
+              {df.label}
+            </button>
+          ))}
+          <input
+            type="date"
+            value={customDate}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => {
+              setCustomDate(e.target.value);
+              setDateFilter(e.target.value ? 'custom' : 'all');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer outline-none ${
+              dateFilter === 'custom'
+                ? 'bg-sky-600 text-white border-sky-600 shadow-md shadow-sky-600/20 font-black'
+                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+            }`}
+          />
+        </div>
       </div>
 
       {/* ── 4 Top Stat Summary Cards (Dynamic Database Totals) ────────────────────────── */}
@@ -588,7 +772,7 @@ export default function DoctorDashboard() {
                   >
                     <span>All</span>
                     <span className={`px-1.5 py-0.2 text-[10px] rounded-md ${apptTab === 'all' ? 'bg-emerald-100 text-emerald-800 font-extrabold' : 'bg-gray-200 text-gray-600'}`}>
-                      {displayAppointments.length}
+                      {activeAppointments.length}
                     </span>
                   </button>
                 </div>
@@ -647,7 +831,14 @@ export default function DoctorDashboard() {
                           <td className="py-3.5 px-2 text-gray-400 font-bold">{idx + 1}</td>
                           <td className="py-3.5 px-3">
                             <p className="font-bold text-gray-800">{patName}</p>
-                            {patPhone && <p className="text-[10px] text-gray-400 font-mono">{patPhone}</p>}
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              {patPhone && <span className="text-[10px] text-gray-400 font-mono">{patPhone}</span>}
+                              {item.verifiedBy && (
+                                <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.2 rounded border border-emerald-200/80 font-semibold" title="Staff Verifier">
+                                  👤 {typeof item.verifiedBy === 'object' ? item.verifiedBy.name : item.verifiedBy}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3.5 px-3 text-gray-600">{patTime}</td>
                           <td className="py-3.5 px-3 text-gray-600">{patDoctor}</td>
@@ -719,7 +910,7 @@ export default function DoctorDashboard() {
                                 <button
                                   type="button"
                                   disabled={updatingStatusId === (item._id || item.id)}
-                                  onClick={(e) => handleCompleteAppointment(item._id || item.id, e)}
+                                  onClick={(e) => handleCompleteAppointment(item._id || item.id, item, e)}
                                   className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1 shadow-sm disabled:opacity-50"
                                   title="Mark Appointment as Completed"
                                 >
@@ -814,12 +1005,91 @@ export default function DoctorDashboard() {
                 }`}
               >
                 <span>All</span>
-                {combinedDispatchList.length > 0 && (
+                {deptFilteredDispatches.length > 0 && (
                   <span className={`px-1.5 py-0.2 text-[9px] rounded-md ${dispatchTab === 'all' ? 'bg-emerald-100 text-emerald-800 font-extrabold' : 'bg-gray-200 text-gray-600'}`}>
-                    {combinedDispatchList.length}
+                    {deptFilteredDispatches.length}
                   </span>
                 )}
               </button>
+            </div>
+
+            {/* Prescription Sub-Filter Bar (Source Provider & Quick Search) */}
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              <div className="flex items-center bg-gray-100/90 p-0.5 rounded-lg text-[10px] font-bold border border-gray-200/60">
+                <button
+                  type="button"
+                  onClick={() => setRxTypeFilter('all')}
+                  className={`px-2 py-0.5 rounded-md transition ${rxTypeFilter === 'all' ? 'bg-white text-emerald-700 shadow-sm font-black' : 'text-gray-500 hover:text-gray-800'}`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRxTypeFilter('shipmaxx')}
+                  className={`px-2 py-0.5 rounded-md transition flex items-center gap-1 ${rxTypeFilter === 'shipmaxx' ? 'bg-sky-600 text-white shadow-sm font-black' : 'text-gray-500 hover:text-gray-800'}`}
+                >
+                  <span>ShipMaxx</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRxTypeFilter('rts')}
+                  className={`px-2 py-0.5 rounded-md transition flex items-center gap-1 ${rxTypeFilter === 'rts' ? 'bg-amber-600 text-white shadow-sm font-black' : 'text-gray-500 hover:text-gray-800'}`}
+                >
+                  <span>RTS</span>
+                </button>
+              </div>
+
+              <div className="flex-1 min-w-[100px]">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Filter Rx..."
+                    value={rxSearchQuery}
+                    onChange={(e) => setRxSearchQuery(e.target.value)}
+                    className="w-full px-2 py-1 pl-5 text-[10px] font-medium bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-sky-500 focus:bg-white transition"
+                  />
+                  <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] text-gray-400">🔍</span>
+                  {rxSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setRxSearchQuery('')}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 hover:text-gray-600 font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Prescription Specific Date Filter Dropdown */}
+              <div className="flex items-center gap-1">
+                <select
+                  value={rxDateFilter}
+                  onChange={(e) => {
+                    setRxDateFilter(e.target.value);
+                    if (e.target.value !== 'custom') setRxCustomDate('');
+                  }}
+                  className="px-2 py-1 text-[10px] font-bold bg-gray-50 text-gray-700 border border-gray-200 rounded-lg outline-none cursor-pointer hover:bg-white focus:border-sky-500 transition"
+                  title="Filter Prescriptions by Date"
+                >
+                  <option value="all">📅 All Dates</option>
+                  <option value="today">📅 Today</option>
+                  <option value="yesterday">📅 Yesterday</option>
+                  <option value="7days">📅 7 Days</option>
+                  <option value="30days">📅 30 Days</option>
+                  <option value="custom">📅 Custom</option>
+                </select>
+
+                {rxDateFilter === 'custom' && (
+                  <input
+                    type="date"
+                    value={rxCustomDate}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setRxCustomDate(e.target.value)}
+                    className="px-1.5 py-0.5 text-[10px] font-bold bg-white border border-gray-200 rounded-lg outline-none cursor-pointer"
+                  />
+                )}
+              </div>
             </div>
           </div>
 
@@ -834,7 +1104,7 @@ export default function DoctorDashboard() {
               </div>
             ) : (
               upcomingFollowups.map((f, i) => {
-                const isDispatchDone = completedDispatchIds.includes(String(f.id)) || f.status === 'completed' || f.status === 'delivered';
+                const isDispatchDone = isCompletedDispatch(f);
 
                 return (
                   <div
@@ -847,12 +1117,17 @@ export default function DoctorDashboard() {
                         department: f.department,
                         amount: f.amount,
                         pid: f.id,
-                        age: f.age,
-                        weight: f.weight,
-                        gender: f.gender,
-                        maritalStatus: f.maritalStatus,
-                        occupation: f.occupation,
-                        since: f.since || f.problemDuration,
+                        age: f.age || f.raw?.age || f.raw?.lead?.age,
+                        weight: f.weight || f.raw?.weight || f.raw?.lead?.weight,
+                        gender: f.gender || f.raw?.gender || f.raw?.lead?.gender,
+                        maritalStatus: f.maritalStatus || f.raw?.maritalStatus || f.raw?.lead?.maritalStatus,
+                        occupation: f.occupation || f.raw?.occupation || f.raw?.lead?.occupation,
+                        since: f.since || f.problemDuration || f.raw?.problemDuration,
+                        verifierName: f.verifierName || f.raw?.verifierName || f.raw?.verifiedByName,
+                        verifiedBy: f.verifiedBy || f.raw?.verifiedBy || f.raw?.verified_by || f.raw?.assignedTo,
+                        doctorName: f.doctorName || f.raw?.doctorName,
+                        assignedTo: f.assignedTo || f.raw?.assignedTo,
+                        raw: f.raw,
                       });
                       setPrescriptionOpen(true);
                     }}
@@ -866,6 +1141,11 @@ export default function DoctorDashboard() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="text-xs font-bold text-gray-800 truncate">{f.name}</p>
+                          {f.verifierName && !f.verifierName.toLowerCase().includes('admin') && (
+                            <span className="px-1.5 py-0.2 text-[8px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 rounded">
+                              👤 {f.verifierName}
+                            </span>
+                          )}
                           {f.type === 'rts' && (
                             <span className="px-1.5 py-0.2 text-[8px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200 rounded">
                               RTS
@@ -900,12 +1180,17 @@ export default function DoctorDashboard() {
                               department: f.department,
                               amount: f.amount,
                               pid: f.id,
-                              age: f.age,
-                              weight: f.weight,
-                              gender: f.gender,
-                              maritalStatus: f.maritalStatus,
-                              occupation: f.occupation,
-                              since: f.since || f.problemDuration,
+                              age: f.age || f.raw?.age || f.raw?.lead?.age,
+                              weight: f.weight || f.raw?.weight || f.raw?.lead?.weight,
+                              gender: f.gender || f.raw?.gender || f.raw?.lead?.gender,
+                              maritalStatus: f.maritalStatus || f.raw?.maritalStatus || f.raw?.lead?.maritalStatus,
+                              occupation: f.occupation || f.raw?.occupation || f.raw?.lead?.occupation,
+                              since: f.since || f.problemDuration || f.raw?.problemDuration,
+                              verifierName: f.verifierName || f.raw?.verifierName || f.raw?.verifiedByName,
+                              verifiedBy: f.verifiedBy || f.raw?.verifiedBy || f.raw?.verified_by || f.raw?.assignedTo,
+                              doctorName: f.doctorName || f.raw?.doctorName,
+                              assignedTo: f.assignedTo || f.raw?.assignedTo,
+                              raw: f.raw,
                             });
                             setPrescriptionOpen(true);
                           }}
@@ -916,7 +1201,7 @@ export default function DoctorDashboard() {
                         </button>
                       )}
 
-                      {/* Done Button */}
+                      {/* Done / Complete Button */}
                       {isDispatchDone ? (
                         <span className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold rounded-lg flex items-center gap-0.5">
                           <span>✓</span>
@@ -930,7 +1215,7 @@ export default function DoctorDashboard() {
                           title="Mark as Done"
                         >
                           <span>✓</span>
-                          <span>Done</span>
+                          <span>Complete</span>
                         </button>
                       )}
                     </div>
