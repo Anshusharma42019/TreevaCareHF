@@ -459,21 +459,23 @@ function NdrNotesPanel() {
   const [loading, setLoading]   = useState(false);
   const [filterDate, setFilterDate] = useState('');
   const [search, setSearch]     = useState('');
+  const [showAllNotes, setShowAllNotes] = useState(false);
   const [form, setForm]         = useState({ name: '', phone_number: '', reason: '', awb_number: '', date: new Date().toISOString().split('T')[0] });
   const [editId, setEditId]     = useState(null);
   const [error, setError]       = useState('');
   const [saving, setSaving]     = useState(false);
 
-  const fetchNotes = useCallback((date = filterDate, q = search) => {
+  const fetchNotes = useCallback((date = filterDate, q = search, isAll = showAllNotes) => {
     setLoading(true);
     const params = {};
     if (date) params.date = date;
     if (q)    params.search = q;
+    if (isAll) params.all = 'true';
     smxSvc.getNdrNotes(params)
       .then(r => setNotes(r.data?.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filterDate, search]);
+  }, [filterDate, search, showAllNotes]);
 
   useEffect(() => { fetchNotes(); }, []);
 
@@ -555,16 +557,33 @@ function NdrNotesPanel() {
           <span className="font-semibold text-gray-700 text-sm flex-1">
             ShipMaxx Notes {notes.length > 0 && <span className="text-xs text-gray-400 font-normal ml-1">({notes.length})</span>}
           </span>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterDate('');
+              setSearch('');
+              setShowAllNotes(true);
+              fetchNotes('', '', true);
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 border ${
+              showAllNotes && !filterDate && !search
+                ? 'bg-yellow-500 text-white border-yellow-500 shadow-sm'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+            }`}
+            title="Show all notes created"
+          >
+            <span>All</span>
+          </button>
           <input placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && fetchNotes(filterDate, search)}
+            onKeyDown={e => e.key === 'Enter' && fetchNotes(filterDate, search, showAllNotes)}
             className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-yellow-400 w-36" />
-          <input type="date" value={filterDate} onChange={e => { setFilterDate(e.target.value); fetchNotes(e.target.value, search); }}
+          <input type="date" value={filterDate} onChange={e => { setFilterDate(e.target.value); setShowAllNotes(false); fetchNotes(e.target.value, search, false); }}
             className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-yellow-400" />
-          {filterDate && (
-            <button onClick={() => { setFilterDate(''); fetchNotes('', search); }}
-              className="text-xs text-gray-400 hover:text-gray-600 font-semibold">Clear</button>
+          {(filterDate || search || showAllNotes) && (
+            <button onClick={() => { setFilterDate(''); setSearch(''); setShowAllNotes(false); fetchNotes('', '', false); }}
+              className="text-xs text-gray-400 hover:text-gray-600 font-semibold">Reset</button>
           )}
-          <button onClick={() => fetchNotes(filterDate, search)}
+          <button onClick={() => fetchNotes(filterDate, search, showAllNotes)}
             className="px-4 py-1.5 rounded-xl bg-yellow-500 text-white text-xs font-bold hover:bg-yellow-600 transition">
             {loading ? '…' : 'Refresh'}
           </button>
