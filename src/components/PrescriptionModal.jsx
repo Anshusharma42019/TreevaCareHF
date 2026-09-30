@@ -640,13 +640,13 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
 
     const applyVitals = (obj) => {
       if (!obj) return;
-      const a = obj.age ?? obj.lead?.age;
-      const w = obj.weight ?? obj.lead?.weight;
-      const g = obj.gender ?? obj.lead?.gender ?? obj.sex;
-      const m = obj.maritalStatus ?? obj.marriedStatus ?? obj.marital_status ?? obj.marital ?? obj.lead?.maritalStatus ?? obj.lead?.marriedStatus;
-      const p = obj.occupation ?? obj.profession ?? obj.lead?.occupation;
-      const s = obj.problemDuration ?? obj.since ?? obj.duration ?? obj.lead?.problemDuration;
-      const t = obj.problem ?? obj.disease ?? obj.treatingFor ?? obj.lead?.problem;
+      const a = obj.age ?? obj.lead?.age ?? obj.lead_id?.age;
+      const w = obj.weight ?? obj.lead?.weight ?? obj.lead_id?.weight;
+      const g = obj.gender ?? obj.lead?.gender ?? obj.lead_id?.gender ?? obj.sex;
+      const m = obj.maritalStatus ?? obj.marriedStatus ?? obj.marital_status ?? obj.marital ?? obj.lead?.maritalStatus ?? obj.lead_id?.maritalStatus ?? obj.lead?.marriedStatus;
+      const p = obj.occupation ?? obj.profession ?? obj.lead?.occupation ?? obj.lead_id?.occupation;
+      const s = obj.problemDuration ?? obj.since ?? obj.duration ?? obj.lead?.problemDuration ?? obj.lead_id?.problemDuration;
+      const t = obj.problem ?? obj.disease ?? obj.treatingFor ?? obj.lead?.problem ?? obj.lead_id?.problem;
       const verifier = getVerifierName(obj);
 
       setPatientInfo((prev) => ({
@@ -672,25 +672,24 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
       applyVitals(patientData.raw);
       applyVitals(patientData);
 
-      // Load prescribedMedicines if saved on patientData or populated lead/task
+      // Load prescribedMedicines if saved on patientData or populated objects
+      const extractMeds = (obj) => {
+        if (!obj) return null;
+        if (Array.isArray(obj.prescribedMedicines) && obj.prescribedMedicines.length > 0) return obj.prescribedMedicines;
+        if (Array.isArray(obj.prescribed_medicines) && obj.prescribed_medicines.length > 0) return obj.prescribed_medicines;
+        if (Array.isArray(obj.medicines) && obj.medicines.length > 0) return obj.medicines;
+        if (obj.doctor_prescription && Array.isArray(obj.doctor_prescription.prescribedMedicines) && obj.doctor_prescription.prescribedMedicines.length > 0) return obj.doctor_prescription.prescribedMedicines;
+        return null;
+      };
+
       const mList =
-        (Array.isArray(patientData.prescribedMedicines) && patientData.prescribedMedicines.length > 0
-          ? patientData.prescribedMedicines
-          : null) ||
-        (patientData.lead && Array.isArray(patientData.lead.prescribedMedicines) && patientData.lead.prescribedMedicines.length > 0
-          ? patientData.lead.prescribedMedicines
-          : null) ||
-        (patientData.task && Array.isArray(patientData.task.prescribedMedicines) && patientData.task.prescribedMedicines.length > 0
-          ? patientData.task.prescribedMedicines
-          : null) ||
-        (Array.isArray(patientData.medicines) && patientData.medicines.length > 0
-          ? patientData.medicines
-          : null) ||
-        (Array.isArray(patientData.prescribedMedicines)
-          ? patientData.prescribedMedicines
-          : Array.isArray(patientData.lead?.prescribedMedicines)
-          ? patientData.lead.prescribedMedicines
-          : []);
+        extractMeds(patientData) ||
+        extractMeds(patientData.lead) ||
+        extractMeds(patientData.lead_id) ||
+        extractMeds(patientData.task) ||
+        extractMeds(patientData.verification) ||
+        extractMeds(patientData.appointment) ||
+        [];
 
       setPrescribedMedicines(mList);
 
@@ -699,12 +698,13 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
       const leadId = patientData.lead?._id || patientData.lead || patientData.lead_id?._id || patientData.lead_id;
       const taskId = patientData.task?._id || patientData.task;
 
-      if (targetId || leadId || taskId) {
+      if (targetId || leadId || taskId || cleanMobile) {
         API.get('/prescriptions/get-by-target', {
           params: {
             targetId: targetId ? String(targetId) : undefined,
             leadId: leadId ? String(leadId) : undefined,
             taskId: taskId ? String(taskId) : undefined,
+            phone: cleanMobile || undefined,
           },
         })
           .then((res) => {

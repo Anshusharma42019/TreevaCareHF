@@ -63,6 +63,8 @@ export const addFollowUp             = (id, body) => api.post(`${BASE}/orders/${
 export const setNextFollowUp         = (id, body) => api.patch(`${BASE}/orders/${id}/next-follow-up`, body);
 export const updateFollowupRelief    = (id, body) => api.patch(`${BASE}/orders/${id}/followup-relief`, body);
 export const createManualFollowup    = (body)     => api.post(`${BASE}/orders/manual-followup`, body);
+export const autoDistribute          = (body)     => api.post(`${BASE}/orders/auto-distribute`, body);
+export const deleteOrder             = (id)       => api.delete(`${BASE}/orders/${id}`);
 
 // ── Verification ──────────────────────────────────────────────────────────────
 export const sendToVerification = (id, body = {}) => api.post(`${BASE}/orders/${id}/send-to-verification`, body);

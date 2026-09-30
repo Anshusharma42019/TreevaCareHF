@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import * as smxSvc from '../services/shipmaxx.service';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
+import PrescriptionModal from '../components/PrescriptionModal';
 
 const PER_PAGE = 20;
 const TOTAL_FU = 5;
@@ -123,11 +124,53 @@ export default function ShipmaxxFollowup() {
   const [completedLoading, setCompletedLoading] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [bookedSearchAll, setBookedSearchAll] = useState([]); // all booked kits for searched phone
+  const [filterKitType, setFilterKitType] = useState('all'); // 'all' | 'new' | 'old' | '1' | '2' | '3' | '4' | '5+'
+  const [filterScheduleType, setFilterScheduleType] = useState('all'); // 'all' | 'today' | 'overdue' | 'picked'
+  const [pickedDate, setPickedDate] = useState(() => toDateInputValue(new Date()));
+  const [staffFilter, setStaffFilter] = useState('');
+  const [staffUsers, setStaffUsers] = useState([]);
+  const [distributing, setDistributing] = useState(false);
   const [showAddonForm, setShowAddonForm] = useState(false);
   const [addonFields, setAddonFields] = useState({ medicine: '', price: '', notes: '' });
   const [addonModalOpen, setAddonModalOpen] = useState(false);
   const [addonForm, setAddonForm] = useState({ medicine: '', price: '', notes: '', targetOrder: null });
   const [addonSaving, setAddonSaving] = useState(false);
+  const [rxModalOpen, setRxModalOpen] = useState(false);
+  const [selectedRxOrder, setSelectedRxOrder] = useState(null);
+
+  const openPrescriptionModal = (targetOrder) => {
+    const ord = targetOrder || selected;
+    if (!ord) return;
+    const dept = detectDept(ord);
+    const ageVal = ord.age || ord.lead_id?.age || ord.lead?.age || ord.doctor_prescription?.age || '';
+    const weightVal = ord.weight || ord.lead_id?.weight || ord.lead?.weight || ord.doctor_prescription?.weight || '';
+    const genderVal = ord.gender || ord.lead_id?.gender || ord.lead?.gender || ord.doctor_prescription?.gender || 'Male';
+    const maritalVal = ord.maritalStatus || ord.marriedStatus || ord.lead_id?.maritalStatus || ord.lead?.maritalStatus || ord.doctor_prescription?.maritalStatus || '';
+    const occVal = ord.occupation || ord.profession || ord.lead_id?.occupation || ord.lead?.occupation || ord.doctor_prescription?.occupation || '';
+    const sinceVal = ord.since || ord.problemDuration || ord.lead_id?.problemDuration || ord.lead?.problemDuration || ord.doctor_prescription?.problemDuration || '';
+
+    setSelectedRxOrder({
+      ...ord,
+      patientName: ord.billing_customer_name,
+      mobile: ord.billing_phone,
+      pid: ord.order_id,
+      amount: ord.sub_total ?? ord.amount,
+      department: dept,
+      problem: ord.verification_problem || ord.problem || ord.lead_id?.problem || '',
+      verifiedBy: ord.verified_by?.name || ord.verifiedBy?.name || '',
+      doctorName: ord.doctorName || ord.created_by?.name || ord.task_created_by?.name || '',
+      age: ageVal,
+      weight: weightVal,
+      gender: genderVal,
+      maritalStatus: maritalVal,
+      marriedStatus: maritalVal,
+      occupation: occVal,
+      profession: occVal,
+      since: sinceVal,
+      problemDuration: sinceVal,
+    });
+    setRxModalOpen(true);
+  };
 
   const openAddonModal = (order) => {
     const target = order || selected;
@@ -250,6 +293,20 @@ export default function ShipmaxxFollowup() {
     try { await smxSvc.syncShipmaxx(); } catch { }
     finally { setSyncing(false); }
     await load();
+  };
+
+  const handleAutoDistribute = async () => {
+    if (!window.confirm('Auto-distribute all pending follow-ups equally among active sales and support staff?')) return;
+    setDistributing(true);
+    try {
+      const res = await smxSvc.autoDistribute({ department: department || undefined });
+      alert(res.data?.message || 'Auto-distributed follow-ups successfully!');
+      await load();
+    } catch (e) {
+      alert('Distribution failed: ' + (e?.response?.data?.message || e.message));
+    } finally {
+      setDistributing(false);
+    }
   };
 
   const autoFetch = useCallback((silent) => {
@@ -410,6 +467,21 @@ export default function ShipmaxxFollowup() {
     finally { setDoneLoading(null); }
   };
 
+  const handleDeleteOrder = async (e, orderId, orderName) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete "${orderName || 'this order'}" permanently?`)) return;
+    try {
+      await smxSvc.deleteOrder(orderId);
+      setAll(prev => prev.filter(o => String(o._id) !== String(orderId) && String(o.order_id) !== String(orderId)));
+      setCompletedList(prev => prev.filter(o => String(o._id) !== String(orderId) && String(o.order_id) !== String(orderId)));
+      if (selected && (String(selected._id) === String(orderId) || String(selected.order_id) === String(orderId))) {
+        setSelected(null);
+      }
+    } catch (err) {
+      alert('Failed to delete order: ' + (err?.response?.data?.message || err.message));
+    }
+  };
+
   const saveNote = async () => {
     if (!selected || !noteText.trim()) return;
     setNoteSaving(true);
@@ -536,69 +608,166 @@ export default function ShipmaxxFollowup() {
       .then(res => setActivity(Array.isArray(res.data?.data) ? res.data.data : []))
       .catch(() => setActivity([]))
       .finally(() => setActivityLoading(false));
+
+    // Fetch live Doctor Prescription
+    const cleanPhone = String(order.billing_phone || '').replace(/\D/g, '').slice(-10);
+    api.get('/prescriptions/get-by-target', {
+      params: {
+        targetId: order._id,
+        leadId: order.lead_id?._id || order.lead_id || undefined,
+        phone: cleanPhone || undefined
+      }
+    }).then(res => {
+      if (res.data?.data) {
+        const rx = res.data.data;
+        setSelected(prev => prev && String(prev._id) === String(order._id) ? {
+          ...prev,
+          doctor_prescription: rx,
+          prescribed_medicines: rx.prescribedMedicines || prev.prescribed_medicines || [],
+          doctor_name: rx.doctorName || prev.doctor_name || ''
+        } : prev);
+      }
+    }).catch(() => {});
   };
 
-  const dueCounts = followupNumbers.reduce((acc, n) => {
-    acc[n] = all.filter(o => {
-      const allFUs = (o.followups || []);
-      const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
-      if (completedCount >= TOTAL_FU || o.sent_to_verification || o.followup_done) return false;
-      const fu = getFollowup(o, n);
-      return fu && !fu.completed && previousFollowupsDone(o, n);
-    }).length;
-    return acc;
-  }, {});
-
-  const ALLOWED_DEPTS = ['male', 'ortho', 'skin'];
+  const ALLOWED_DEPTS = ['male', 'ortho', 'skin', 'migraine', 'piles'];
 
   const detectDept = (o) => {
-    if (o.department && ALLOWED_DEPTS.includes(o.department)) return o.department;
-    if (o.lead_id?.department && ALLOWED_DEPTS.includes(o.lead_id.department)) return o.lead_id.department;
+    if (o.department && ALLOWED_DEPTS.includes(o.department.toLowerCase())) return o.department.toLowerCase();
+    if (o.lead_id?.department && ALLOWED_DEPTS.includes(o.lead_id.department.toLowerCase())) return o.lead_id.department.toLowerCase();
     const prodStr = ((o.order_items || []).map(p => p.name || '').join(' ') + ' ' + (o.verification_problem || o.problem || o.lead_id?.problem || '')).toLowerCase();
-    if (/migraine|piles/i.test(prodStr)) return 'other';
+    if (/migraine/i.test(prodStr)) return 'migraine';
+    if (/piles/i.test(prodStr)) return 'piles';
     if (/\b(male|men|man|sexual|erectile|testosterone|prostate|semen|penis|ed|nightfall|sperm|discharge)\b/i.test(prodStr)) return 'male';
     if (/\b(ortho|joint|knee|bone|fracture|arthritis|spine|back pain|shoulder|ligament|gout)\b/i.test(prodStr)) return 'ortho';
     if (/\b(skin|acne|pimple|rash|eczema|psoriasis|derma|pigmentation|face)\b/i.test(prodStr)) return 'skin';
     return 'other';
   };
 
-  const filtered = all.filter(o => {
-    const allFUs = (o.followups || []);
-    const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
-    if (completedCount >= TOTAL_FU || o.sent_to_verification || o.followup_done) return false;
+  const getActiveCallStage = useCallback((order) => {
+    const allFUs = (order.followups || []).slice().sort((a, b) => a.followup_number - b.followup_number);
+    const uncompleted = allFUs.filter(f => !f.completed);
+    if (uncompleted.length === 0) return null; // All 5 done
 
+    const todayStr = toDateInputValue(new Date());
+
+    const dueUncompleted = uncompleted.filter(f => {
+      if (!f.scheduled_date) return true;
+      return toDateInputValue(f.scheduled_date) <= todayStr;
+    });
+
+    if (dueUncompleted.length > 0) {
+      return dueUncompleted[dueUncompleted.length - 1].followup_number;
+    }
+
+    return uncompleted[0].followup_number;
+  }, []);
+
+  const activeOrders = useMemo(() => {
+    return all.filter(o => {
+      const allFUs = (o.followups || []);
+      const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
+      return completedCount < TOTAL_FU && !o.sent_to_verification && !o.followup_done;
+    });
+  }, [all, completedMap]);
+
+  const dueCounts = followupNumbers.reduce((acc, n) => {
+    acc[n] = activeOrders.filter(o => {
+      const activeStage = getActiveCallStage(o);
+      return activeStage === Number(n);
+    }).length;
+    return acc;
+  }, {});
+
+  const kitCounts = useMemo(() => {
+    let newCount = 0;
+    let oldCount = 0;
+    let todayCount = 0;
+    let overdueCount = 0;
+    let pickedCount = 0;
+    let k1 = 0, k2 = 0, k3 = 0, k4 = 0, k5plus = 0;
+
+    const todayStr = toDateInputValue(new Date());
+
+    activeOrders.forEach(o => {
+      const kNum = o.kit_number || 1;
+      if (kNum <= 1) { newCount++; k1++; }
+      else {
+        oldCount++;
+        if (kNum === 2) k2++;
+        else if (kNum === 3) k3++;
+        else if (kNum === 4) k4++;
+        else if (kNum >= 5) k5plus++;
+      }
+
+      const nextFU = (o.followups || []).find(f => !f.completed);
+      if (nextFU && nextFU.scheduled_date) {
+        const fuDateStr = toDateInputValue(nextFU.scheduled_date);
+        if (fuDateStr === todayStr) todayCount++;
+        if (fuDateStr < todayStr) overdueCount++;
+        if (pickedDate && fuDateStr === pickedDate) pickedCount++;
+      }
+    });
+
+    return {
+      all: activeOrders.length,
+      new: newCount,
+      old: oldCount,
+      today: todayCount,
+      overdue: overdueCount,
+      picked: pickedCount,
+      k1, k2, k3, k4, k5plus
+    };
+  }, [activeOrders, pickedDate]);
+
+  const filtered = activeOrders.filter(o => {
     const orderDept = detectDept(o);
     if (department && department !== 'all') {
       if (orderDept !== department) return false;
-    } else {
-      if (!ALLOWED_DEPTS.includes(orderDept)) return false;
     }
 
-    // When searching: bypass tab/date filter — show ALL matching orders across all followup numbers
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        o.billing_customer_name?.toLowerCase().includes(q) ||
-        o.billing_phone?.includes(q) ||
-        o.order_id?.toString().includes(q) ||
-        o.awb_code?.toLowerCase().includes(q)
-      );
+    if (staffFilter) {
+      const assignedId = o.lead_id?.assignedTo?._id || o.lead_id?.assignedTo || o.created_by?._id || o.created_by;
+      if (String(assignedId) !== String(staffFilter)) return false;
     }
 
     if (filterFollowupNum === 'replies') {
       if (!o.interakt_reply_text || o.interakt_reply_read) return false;
       if (replyFilter !== 'any_reply' && !matchReply(o.interakt_reply_text, replyFilter)) return false;
     } else if (filterFollowupNum) {
-      const fu = getFollowup(o, filterFollowupNum);
-      if (!fu || fu.completed || !previousFollowupsDone(o, filterFollowupNum)) return false;
-      if (filterFollowupNum === '1' && filterDelivered) {
-        if (!isDue(fu.scheduled_date, filterDelivered)) return false;
-      }
-    } else {
-      if (filterDelivered) {
-        const nextFU = allFUs.find(f => !f.completed);
-        if (!nextFU || !isDue(nextFU.scheduled_date, filterDelivered)) return false;
-      }
+      const activeStage = getActiveCallStage(o);
+      if (activeStage !== Number(filterFollowupNum)) return false;
+    }
+
+    const kNum = o.kit_number || 1;
+    if (filterKitType === 'new' && kNum > 1) return false;
+    if (filterKitType === 'old' && kNum <= 1) return false;
+    if (filterKitType === '1' && kNum !== 1) return false;
+    if (filterKitType === '2' && kNum !== 2) return false;
+    if (filterKitType === '3' && kNum !== 3) return false;
+    if (filterKitType === '4' && kNum !== 4) return false;
+    if (filterKitType === '5+' && kNum < 5) return false;
+
+    if (filterScheduleType !== 'all') {
+      const nextFU = (o.followups || []).find(f => !f.completed);
+      if (!nextFU || !nextFU.scheduled_date) return false;
+      const fuDateStr = toDateInputValue(nextFU.scheduled_date);
+      const todayStr = toDateInputValue(new Date());
+
+      if (filterScheduleType === 'today' && fuDateStr !== todayStr) return false;
+      if (filterScheduleType === 'overdue' && fuDateStr >= todayStr) return false;
+      if (filterScheduleType === 'picked' && pickedDate && fuDateStr !== pickedDate) return false;
+    }
+
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        o.billing_customer_name?.toLowerCase().includes(q) ||
+        o.billing_phone?.includes(q) ||
+        o.order_id?.toString().includes(q) ||
+        o.awb_code?.toLowerCase().includes(q) ||
+        (o.order_items || []).some(item => item.name?.toLowerCase().includes(q))
+      );
     }
     return true;
   });
@@ -606,16 +775,12 @@ export default function ShipmaxxFollowup() {
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // Booked kits matching search — uses bookedSearchAll (fetches up to 500, so Kit 3,4,5,6... all included)
   const bookedSearchMatches = bookedSearchAll;
 
-  // Filter completedList by search term for Done tab rendering
   const displayCompletedList = completedList.filter(o => {
     const orderDept = detectDept(o);
     if (department && department !== 'all') {
       if (orderDept !== department) return false;
-    } else {
-      if (!ALLOWED_DEPTS.includes(orderDept)) return false;
     }
     if (!search) return true;
     const q = search.toLowerCase();
@@ -628,129 +793,257 @@ export default function ShipmaxxFollowup() {
   });
 
   return (
-    <div className="min-h-full bg-glow pb-10 px-3 sm:px-6 lg:px-8 space-y-8 pt-4">
+    <div className="min-h-full bg-glow pb-10 px-3 sm:px-6 lg:px-8 space-y-5 pt-4">
 
-      {/* ── Stats Row ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        {followupNumbers.map((n, i) => {
-          const colors = ['from-emerald-400 to-teal-500','from-blue-400 to-indigo-500','from-amber-400 to-orange-500','from-rose-400 to-red-500','from-purple-400 to-violet-500'];
+      {/* ── Row 1: Call Tabs Bar ── */}
+      <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 p-1.5 shadow-sm overflow-x-auto no-scrollbar gap-1">
+        <button
+          type="button"
+          onClick={() => { setShowCompleted(false); setFilterFollowupNum(''); setPage(1); }}
+          className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+            !showCompleted && !filterFollowupNum ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100/80'
+          }`}
+        >
+          <span>All Pending</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${!showCompleted && !filterFollowupNum ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}>
+            {activeOrders.length}
+          </span>
+        </button>
+
+        {followupNumbers.map(n => {
+          const active = !showCompleted && filterFollowupNum === String(n);
           const count = dueCounts[n] || 0;
           return (
-            <div key={n} className="bg-white rounded-2xl p-3 sm:p-5 shadow-sm border border-gray-100/50 hover:shadow-lg transition-all">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className={`w-8 h-8 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-gradient-to-br ${colors[i]} flex items-center justify-center text-white font-black text-sm sm:text-base shrink-0 shadow-lg`}>{n}</div>
-                <div>
-                  <p className="text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">{ordinal(n - 1)} Call</p>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-lg sm:text-2xl font-black text-gray-900">{count}</span>
-                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-300">DUE</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <button
+              key={n}
+              type="button"
+              onClick={() => { setShowCompleted(false); setFilterFollowupNum(String(n)); setPage(1); }}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+                active ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100/80'
+              }`}
+            >
+              <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${active ? 'bg-white/30 text-white' : 'bg-emerald-100 text-emerald-700'}`}>
+                {n}
+              </span>
+              <span>{ordinal(n - 1)} Call</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                {count}
+              </span>
+            </button>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => { setShowCompleted(false); setFilterFollowupNum('replies'); setPage(1); }}
+          className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+            !showCompleted && filterFollowupNum === 'replies' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-600 hover:bg-indigo-50'
+          }`}
+        >
+          <span>Replies</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${!showCompleted && filterFollowupNum === 'replies' ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-700'}`}>
+            {activeOrders.filter(o => !!o.interakt_reply_text && !o.interakt_reply_read).length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setShowCompleted(true); setCompletedPage(1); loadCompleted(false, 1, search); }}
+          className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ml-auto ${
+            showCompleted ? 'bg-gray-900 text-white shadow-md' : 'bg-gray-800 text-white hover:bg-gray-900'
+          }`}
+        >
+          <span>Done</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
+            {completedTotal}
+          </span>
+        </button>
       </div>
 
-      {/* ── Header / Controls ── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3 w-full">
-          {/* Tab bar */}
-          <div className="flex items-center bg-white rounded-2xl border border-gray-100 p-1 shadow-sm overflow-x-auto no-scrollbar max-w-full">
-            <button onClick={() => { setShowCompleted(false); setFilterFollowupNum(''); setPage(1); }}
-              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${!showCompleted && !filterFollowupNum ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
-              All ({all.length})
+      {/* ── Row 2: Sub-Filters Bar (Kits, Today, Overdue, Date Picker, Kit Badges) ── */}
+      <div className="flex flex-wrap items-center bg-white rounded-2xl border border-gray-100 p-2 shadow-sm gap-2">
+        <button
+          type="button"
+          onClick={() => { setFilterKitType('all'); setFilterScheduleType('all'); setPage(1); }}
+          className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+            filterKitType === 'all' && filterScheduleType === 'all' ? 'bg-gray-800 text-white shadow' : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span>All Kits</span>
+          <span className="px-1.5 py-0.5 rounded-md text-[9px] bg-white/20 text-current">{kitCounts.all}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setFilterKitType('new'); setPage(1); }}
+          className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+            filterKitType === 'new' ? 'bg-emerald-600 text-white shadow' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+          }`}
+        >
+          <span>New (1st Kit)</span>
+          <span className="px-1.5 py-0.5 rounded-md text-[9px] bg-emerald-200/50">{kitCounts.new}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setFilterKitType('old'); setPage(1); }}
+          className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+            filterKitType === 'old' ? 'bg-purple-600 text-white shadow' : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+          }`}
+        >
+          <span>Old (2nd+ Kit)</span>
+          <span className="px-1.5 py-0.5 rounded-md text-[9px] bg-purple-200/50">{kitCounts.old}</span>
+        </button>
+
+        <div className="h-4 w-px bg-gray-200 mx-1" />
+
+        <button
+          type="button"
+          onClick={() => { setFilterScheduleType('today'); setPage(1); }}
+          className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+            filterScheduleType === 'today' ? 'bg-blue-600 text-white shadow' : 'text-blue-700 bg-blue-50 hover:bg-blue-100'
+          }`}
+        >
+          <span>Today</span>
+          <span className="px-1.5 py-0.5 rounded-md text-[9px] bg-blue-200/50">{kitCounts.today}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setFilterScheduleType('overdue'); setPage(1); }}
+          className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+            filterScheduleType === 'overdue' ? 'bg-rose-600 text-white shadow' : 'text-rose-700 bg-rose-50 hover:bg-rose-100'
+          }`}
+        >
+          <span>Overdue</span>
+          <span className="px-1.5 py-0.5 rounded-md text-[9px] bg-rose-200/50">{kitCounts.overdue}</span>
+        </button>
+
+        <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1">
+          <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Pick:</span>
+          <input
+            type="date"
+            value={pickedDate}
+            onChange={e => { setPickedDate(e.target.value); setFilterScheduleType('picked'); setPage(1); }}
+            className="bg-transparent text-xs font-bold text-gray-800 focus:outline-none cursor-pointer"
+          />
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-gray-200 text-gray-700">{kitCounts.picked}</span>
+        </div>
+
+        <div className="h-4 w-px bg-gray-200 mx-1 hidden sm:block" />
+
+        <div className="flex items-center gap-1 flex-wrap">
+          {[
+            { key: '1', label: '1st Kit', count: kitCounts.k1 },
+            { key: '2', label: '2nd Kit', count: kitCounts.k2 },
+            { key: '3', label: '3rd Kit', count: kitCounts.k3 },
+            { key: '4', label: '4th Kit', count: kitCounts.k4 },
+            { key: '5+', label: '5th+', count: kitCounts.k5plus },
+          ].map(k => (
+            <button
+              key={k.key}
+              type="button"
+              onClick={() => { setFilterKitType(k.key); setPage(1); }}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition flex items-center gap-1 ${
+                filterKitType === k.key ? 'bg-purple-700 text-white shadow' : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+              }`}
+            >
+              <span>{k.label}</span>
+              <span className="font-bold">{k.count}</span>
             </button>
-            {followupNumbers.map(n => (
-              <button key={n} onClick={() => { setShowCompleted(false); setFilterFollowupNum(String(n)); setPage(1); }}
-                className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${!showCompleted && filterFollowupNum === String(n) ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
-                {ordinal(n - 1)} ({dueCounts[n] || 0})
-              </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Row 3: Actions & Search Controls Bar ── */}
+      <div className="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-3">
+        <div className="relative w-full sm:flex-1 sm:max-w-[320px]">
+          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
+          </svg>
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); setCompletedPage(1); }}
+            placeholder="Search name, phone, order, AWB..."
+            className="w-full pl-11 pr-5 py-2.5 rounded-2xl border border-gray-100 bg-white text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-emerald-400/20 transition shadow-sm"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setManualModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-[11px] font-black text-white shadow-md hover:-translate-y-0.5 transition-all uppercase tracking-wider active:scale-95 bg-blue-600 hover:bg-blue-700"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+            + Manual Add
+          </button>
+
+          <button
+            type="button"
+            onClick={syncAndLoad}
+            disabled={syncing || loading}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-[11px] font-black text-white shadow-md hover:-translate-y-0.5 transition-all uppercase tracking-wider active:scale-95 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+          >
+            <svg className={`w-4 h-4 ${syncing || loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+            </svg>
+            {syncing ? 'Syncing...' : 'Sync Live'}
+          </button>
+
+          <select
+            value={department}
+            onChange={e => { setDepartment(e.target.value); setPage(1); }}
+            className="bg-white border border-gray-200 rounded-2xl px-3.5 py-2.5 text-xs font-black text-gray-700 uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-sm cursor-pointer"
+          >
+            <option value="">ALL DEPTS ({activeOrders.length})</option>
+            <option value="male">MALE ({activeOrders.filter(o => detectDept(o) === 'male').length})</option>
+            <option value="skin">SKIN ({activeOrders.filter(o => detectDept(o) === 'skin').length})</option>
+            <option value="ortho">ORTHO ({activeOrders.filter(o => detectDept(o) === 'ortho').length})</option>
+            <option value="migraine">MIGRAINE ({activeOrders.filter(o => detectDept(o) === 'migraine').length})</option>
+            <option value="piles">PILES ({activeOrders.filter(o => detectDept(o) === 'piles').length})</option>
+          </select>
+
+          <select
+            value={staffFilter}
+            onChange={e => { setStaffFilter(e.target.value); setPage(1); }}
+            className="bg-white border border-gray-200 rounded-2xl px-3.5 py-2.5 text-xs font-black text-gray-700 uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-sm cursor-pointer"
+          >
+            <option value="">ALL STAFF ({activeOrders.length})</option>
+            {staffUsers.map(u => (
+              <option key={u._id} value={u._id}>
+                {u.name.toUpperCase()} ({activeOrders.filter(o => String(o.lead_id?.assignedTo?._id || o.lead_id?.assignedTo || o.created_by?._id || o.created_by) === String(u._id)).length})
+              </option>
             ))}
-            <button onClick={() => { setShowCompleted(false); setFilterFollowupNum('replies'); setPage(1); }}
-              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${!showCompleted && filterFollowupNum === 'replies' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-500 hover:bg-indigo-50'}`}>
-              Replies ({all.filter(o => !!o.interakt_reply_text && !o.interakt_reply_read && !o.sent_to_verification && !o.followup_done && (completedMap[o._id] ?? (o.followups||[]).filter(f=>f.completed).length) < TOTAL_FU).length})
-            </button>
-            <button onClick={() => { setShowCompleted(true); setCompletedPage(1); loadCompleted(false, 1, search); }}
-              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${showCompleted ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
-              Done ({completedTotal})
-            </button>
-          </div>
+          </select>
 
+          <button
+            type="button"
+            onClick={handleAutoDistribute}
+            disabled={distributing}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 shadow-sm hover:bg-indigo-100 transition-all uppercase tracking-wider active:scale-95 disabled:opacity-50"
+          >
+            <svg className={`w-4 h-4 text-indigo-600 ${distributing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+            {distributing ? 'Distributing...' : 'Auto-Distribute'}
+          </button>
 
-          <div className="flex flex-col sm:flex-row flex-1 items-center gap-3 w-full">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <select
-                value={department}
-                onChange={e => { setDepartment(e.target.value); setPage(1); setCompletedPage(1); }}
-                className="bg-white border border-gray-100 rounded-2xl px-4 py-3 text-xs font-black text-gray-700 focus:ring-4 focus:ring-emerald-500/10 transition shadow-sm hover:shadow-md shrink-0 cursor-pointer"
-              >
-                <option value="">All Depts (Male, Skin, Ortho)</option>
-                <option value="male">Male</option>
-                <option value="skin">Skin</option>
-                <option value="ortho">Ortho</option>
-              </select>
-              <input type="date" value={filterDelivered} onChange={e => { setFilterDelivered(e.target.value); setPage(1); }}
-                className="bg-white border border-gray-100 rounded-2xl px-4 py-3 text-xs font-black text-gray-700 focus:ring-4 focus:ring-emerald-500/10 transition shadow-sm hover:shadow-md flex-1 sm:flex-none" />
-              {filterDelivered ? (
-                <button onClick={() => { setFilterDelivered(''); setPage(1); }}
-                  title="View All Dates (All Pending Followups)"
-                  className="px-3.5 py-3 rounded-2xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-black uppercase tracking-wider hover:bg-amber-100 transition-all flex items-center gap-1.5 shadow-sm shrink-0">
-                  All Dates
-                </button>
-              ) : (
-                <button onClick={() => { setFilterDelivered(toDateInputValue(new Date())); setPage(1); }}
-                  title="Filter by Today's Date"
-                  className="px-3.5 py-3 rounded-2xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-all flex items-center gap-1.5 shadow-sm shrink-0">
-                  Today Only
-                </button>
-              )}
-            </div>
-
-            <div className="relative w-full sm:flex-1 sm:max-w-[300px]">
-              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
-              </svg>
-              <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); setCompletedPage(1); }} placeholder="Search name, phone, awb..."
-                className="w-full pl-11 pr-5 py-3 rounded-2xl border border-gray-100 bg-white text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-emerald-400/20 transition shadow-sm" />
-            </div>
-
-            <button onClick={() => setManualModalOpen(true)}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-[10px] font-black text-white shadow-xl hover:-translate-y-1 transition-all uppercase tracking-widest active:scale-95"
-              style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-              Manual Add
-            </button>
-
-            <button onClick={syncAndLoad} disabled={syncing || loading}
-              className="w-full sm:w-auto flex items-center justify-center gap-3 px-6 py-3 rounded-2xl text-[10px] font-black text-white shadow-xl hover:-translate-y-1 transition-all uppercase tracking-widest active:scale-95 disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-              <svg className={`w-4 h-4 ${syncing || loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-              </svg>
-              {syncing ? 'Syncing...' : 'Sync Data'}
-            </button>
-
-            <div className="relative w-full sm:w-auto">
-              <select value={replyFilter} onChange={e => { setReplyFilter(e.target.value); setPage(1); }}
-                className="w-full sm:w-auto appearance-none pl-4 pr-10 py-3 rounded-2xl border border-gray-100 bg-white text-[10px] font-black text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 uppercase tracking-widest cursor-pointer hover:bg-gray-50 transition-colors">
-                <option value="all">ALL ORDERS ({all.filter(o => !o.followup_done && !o.sent_to_verification).length})</option>
-                {REPLY_OPTIONS.map(opt => {
-                  const count = opt.value === 'any_reply' 
-                    ? all.filter(o => !!o.interakt_reply_text && !o.interakt_reply_read && !o.followup_done && !o.sent_to_verification).length
-                    : all.filter(o => o.interakt_reply_text && !o.interakt_reply_read && matchReply(o.interakt_reply_text, opt.value) && !o.followup_done && !o.sent_to_verification).length;
-                  return (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label} ({count})
-                    </option>
-                  );
-                })}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7"/></svg>
-              </div>
-            </div>
-          </div>
+          <select
+            value={replyFilter}
+            onChange={e => { setReplyFilter(e.target.value); setPage(1); }}
+            className="bg-white border border-gray-200 rounded-2xl px-3.5 py-2.5 text-xs font-black text-gray-700 uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-sm cursor-pointer"
+          >
+            <option value="all">ALL REPLIES ({activeOrders.length})</option>
+            {REPLY_OPTIONS.map(opt => {
+              const count = opt.value === 'any_reply'
+                ? activeOrders.filter(o => !!o.interakt_reply_text && !o.interakt_reply_read).length
+                : activeOrders.filter(o => o.interakt_reply_text && !o.interakt_reply_read && matchReply(o.interakt_reply_text, opt.value)).length;
+              return (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label.toUpperCase()} ({count})
+                </option>
+              );
+            })}
+          </select>
         </div>
       </div>
 
@@ -850,157 +1143,120 @@ export default function ShipmaxxFollowup() {
               <p className="text-sm text-gray-300 mt-2">{search ? 'Try a different search' : 'No pending calls found in this category'}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto no-scrollbar">
-              {/* Desktop Table */}
-              <table className="hidden xl:table w-full text-xs min-w-[750px]">
-                <thead>
-                  <tr className="text-gray-400 border-b border-gray-100 text-left bg-white">
-                    {['Customer Order', 'Location & Contact', 'Medicine', 'Delivered', 'Progress', 'Next Call', 'Amount', 'Controls'].map(h => (
-                      <th key={h} className="py-4 px-2 xl:px-4 font-black uppercase tracking-wider text-[9px] xl:text-[10px]">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50/50">
-                  {paged.map((o, i) => {
-                    const gradient = ROLE_GRADIENT[i % ROLE_GRADIENT.length];
-                    const allFUs = (o.followups || []).sort((a, b) => a.followup_number - b.followup_number);
-                    const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
-                    const allDone = completedCount >= TOTAL_FU;
-                    const activeFU = getFollowup(o, filterFollowupNum) || allFUs[completedCount];
-                    return (
-                      <tr key={o._id} className="transition-all duration-300 group hover:bg-emerald-50/20">
-                        <td className="py-3 xl:py-4 px-2 xl:px-4">
-                          <div className="flex items-center gap-2 xl:gap-4">
-                            <div className={`w-9 h-9 xl:w-12 xl:h-12 rounded-xl xl:rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm xl:text-base font-black shadow-lg group-hover:scale-110 transition-transform duration-300 shrink-0`}>
-                              {initials(o.billing_customer_name)}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-bold text-gray-800 text-sm truncate">
-                                {o.billing_customer_name || '—'}
-                                <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-purple-100 text-purple-700 border border-purple-200">Kit {o.kit_number || 1}</span>
-                              </p>
-                              <p className="text-[10px] text-gray-400 font-mono mt-0.5">{o.awb_code}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 xl:py-4 px-2 xl:px-4">
-                          <p className="text-sm font-bold text-gray-700">{o.billing_phone}</p>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase">{o.billing_city}{o.billing_state ? `, ${o.billing_state}` : ''}</p>
-                          {filterFollowupNum === 'replies' && o.interakt_reply_text && !o.interakt_reply_read && (
-                            <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[9px] font-bold shadow-sm whitespace-normal leading-tight relative pr-6">
-                              <span>💬</span>
-                              <span>{o.interakt_reply_text}</span>
-                              <button onClick={(e) => handleMarkReplyRead(e, o._id)} className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-emerald-200 text-emerald-800 flex items-center justify-center hover:bg-emerald-300">
-                                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3 xl:py-4 px-2 xl:px-4">
-                          <span className="text-xs font-bold text-gray-700 truncate max-w-[120px] xl:max-w-[140px] block" title={o.order_items?.[0]?.name}>{o.order_items?.[0]?.name || '—'}</span>
-                        </td>
-                        <td className="py-3 xl:py-4 px-2 xl:px-4 text-center">
-                          <span className="text-xs xl:text-sm font-bold text-gray-600 bg-gray-50 px-2 xl:px-3 py-1 xl:py-1.5 rounded-lg xl:rounded-xl border border-gray-100">
-                            {formatDate(o.delivered_at || o.status_updated_at || o.createdAt, { day: '2-digit', month: 'short' })}
+            <div className="space-y-3 p-3 bg-gray-50/50">
+              {paged.map((o, i) => {
+                const gradient = ROLE_GRADIENT[i % ROLE_GRADIENT.length];
+                const allFUs = (o.followups || []).sort((a, b) => a.followup_number - b.followup_number);
+                const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
+                const allDone = completedCount >= TOTAL_FU;
+                const activeFU = getFollowup(o, filterFollowupNum) || allFUs[completedCount];
+                const deptStr = detectDept(o).toUpperCase();
+
+                return (
+                  <div key={o._id} className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white rounded-2xl border border-gray-100/80 shadow-sm hover:shadow-md transition-all">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-black text-sm shrink-0 shadow`}>
+                        {initials(o.billing_customer_name)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-gray-900 text-sm truncate">{o.billing_customer_name || '—'}</span>
+
+                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                            (o.kit_number || 1) <= 1 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-purple-100 text-purple-700 border border-purple-200'
+                          }`}>
+                            KIT {o.kit_number || 1} ({(o.kit_number || 1) <= 1 ? 'NEW' : 'OLD'})
                           </span>
-                        </td>
-                        <td className="py-3 xl:py-4 px-1 xl:px-4">
-                          <div className="flex items-center justify-center gap-1">
-                            {Array.from({ length: TOTAL_FU }, (_, idx) => {
-                              const isDone = idx < completedCount;
-                              const isCurrent = idx === completedCount && !allDone;
-                              return (
-                                <div key={idx} className={`text-[8px] xl:text-[9px] font-black w-5 h-5 xl:w-6 xl:h-6 flex items-center justify-center rounded-md xl:rounded-lg border transition-all ${isDone ? 'bg-gray-100 text-gray-400 border-gray-200' : isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-gray-50 text-gray-300 border-gray-100'}`}>
-                                  {idx + 1}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </td>
-                        <td className="py-3 xl:py-4 px-1 xl:px-4 text-center">
-                          <span className={`text-[9px] xl:text-[11px] font-black uppercase tracking-widest ${allDone ? 'text-gray-400' : 'text-orange-500'}`}>
-                            {allDone ? 'DONE' : formatDate(activeFU?.scheduled_date, { day: '2-digit', month: 'short' })}
+
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-cyan-100 text-cyan-800 border border-cyan-200">
+                            {deptStr}
                           </span>
-                        </td>
-                        <td className="py-3 xl:py-4 px-1 xl:px-4 text-center">
-                          <span className="text-xs xl:text-sm font-black text-gray-700">₹{o.sub_total}</span>
-                        </td>
-                        <td className="py-3 xl:py-4 px-2 xl:px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5 xl:gap-2">
-                            {!allFUs[completedCount]?.completed && !allDone && (
-                              <button onClick={() => handleFollowUpDone(o._id)} disabled={doneLoading === String(o._id)}
-                                className="w-8 h-8 xl:w-10 xl:h-10 flex items-center justify-center rounded-lg xl:rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm active:scale-95 disabled:opacity-50">
-                                {doneLoading === String(o._id) ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <svg className="w-4 h-4 xl:w-5 xl:h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                              </button>
-                            )}
-                            <button onClick={() => handleSelect(o)} className="w-8 h-8 xl:w-10 xl:h-10 flex items-center justify-center rounded-lg xl:rounded-xl bg-gray-50 text-gray-800 hover:bg-gray-900 hover:text-white transition-all shadow-sm active:scale-95">
-                              <svg className="w-4 h-4 xl:w-6 xl:h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        </div>
+
+                        <p className="text-[10px] text-gray-400 font-mono mt-1">
+                          {o.billing_phone} / {o.awb_code || o.order_id || '—'}
+                        </p>
+
+                        {filterFollowupNum === 'replies' && o.interakt_reply_text && !o.interakt_reply_read && (
+                          <div className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold shadow-sm">
+                            <span>💬</span>
+                            <span>{o.interakt_reply_text}</span>
+                            <button onClick={(e) => handleMarkReplyRead(e, o._id)} className="ml-2 w-4 h-4 rounded-full bg-emerald-200 text-emerald-800 flex items-center justify-center hover:bg-emerald-300">
+                              ✓
                             </button>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              {/* Mobile Cards */}
-              <div className="xl:hidden divide-y divide-gray-100">
-                {paged.map((o, i) => {
-                  const allFUs = (o.followups || []).sort((a, b) => a.followup_number - b.followup_number);
-                  const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
-                  const allDone = completedCount >= TOTAL_FU;
-                  const activeFU = getFollowup(o, filterFollowupNum) || allFUs[completedCount];
-                  const gradient = ROLE_GRADIENT[i % ROLE_GRADIENT.length];
-                  return (
-                    <div key={o._id} className="p-4 bg-white hover:bg-gray-50/30 transition-colors">
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-4 gap-3">
-                        <div className="flex items-center gap-3 min-w-0 w-full">
-                          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-black shrink-0 shadow-lg`}>{initials(o.billing_customer_name)}</div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-bold text-gray-900 text-sm truncate">{o.billing_customer_name}</p>
-                            <p className="text-[10px] font-bold text-gray-400 truncate">{o.billing_phone} · {o.billing_city}</p>
-                            {filterFollowupNum === 'replies' && o.interakt_reply_text && !o.interakt_reply_read && (
-                              <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[9px] font-bold shadow-sm whitespace-normal leading-tight relative pr-6 max-w-full">
-                                <span className="shrink-0">💬</span>
-                                <span className="break-words line-clamp-2">{o.interakt_reply_text}</span>
-                                <button onClick={(e) => handleMarkReplyRead(e, o._id)} className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-emerald-200 text-emerald-800 flex items-center justify-center hover:bg-emerald-300 shrink-0">
-                                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-left sm:text-right shrink-0 w-full sm:w-auto flex items-center sm:block justify-between">
-                          <p className="font-black text-gray-900 text-sm">₹{o.sub_total}</p>
-                          <p className="text-[9px] font-bold text-orange-500 uppercase mt-0 sm:mt-1">{allDone ? 'DONE' : `Next: ${formatDate(activeFU?.scheduled_date, { day: '2-digit', month: 'short' })}`}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between bg-gray-50 rounded-[1.25rem] p-3 border border-gray-100 mb-4">
-                        <div className="flex items-center gap-1.5">
-                          {Array.from({ length: TOTAL_FU }, (_, idx) => {
-                            const isDone = idx < completedCount;
-                            const isCurrent = idx === completedCount && !allDone;
-                            return <div key={idx} className={`w-6 h-6 rounded-lg text-[9px] font-black flex items-center justify-center border transition-all ${isDone ? 'bg-gray-200 text-gray-400 border-gray-200' : isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-white text-gray-300 border-gray-200'}`}>{idx + 1}</div>;
-                          })}
-                        </div>
-                        <div className="text-[10px] font-bold text-gray-400">Delivered: <span className="text-gray-700">{formatDate(o.delivered_at || o.createdAt, { day: '2-digit', month: 'short' })}</span></div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!allFUs[completedCount]?.completed && !allDone && (
-                          <button onClick={() => handleFollowUpDone(o._id)} disabled={doneLoading === String(o._id)}
-                            className="flex-1 h-11 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white text-[11px] font-black uppercase tracking-widest shadow-lg active:scale-95 disabled:opacity-50">
-                            {doneLoading === String(o._id) ? 'Processing...' : 'Mark Done'}
-                          </button>
                         )}
-                        <button onClick={() => handleSelect(o)} className="flex-1 h-11 flex items-center justify-center gap-2 rounded-xl bg-gray-900 text-white text-[11px] font-black uppercase tracking-widest shadow-lg active:scale-95">
-                          View Details
-                        </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    <div className="flex items-center gap-4 flex-wrap md:flex-nowrap justify-between md:justify-end pt-2 md:pt-0 border-t md:border-0 border-gray-100">
+                      {/* Step circles 1 2 3 4 5 */}
+                      <div className="flex items-center gap-1.5">
+                        {Array.from({ length: TOTAL_FU }, (_, idx) => {
+                          const callNum = idx + 1;
+                          const activeStage = getActiveCallStage(o);
+                          const fu = (o.followups || []).find(f => f.followup_number === callNum);
+                          const isDone = fu ? fu.completed : idx < completedCount;
+                          const isCurrent = activeStage === callNum;
+                          return (
+                            <div
+                              key={idx}
+                              className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center border transition-all ${
+                                isDone
+                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                  : isCurrent
+                                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-500/20'
+                                  : 'bg-emerald-50/50 text-emerald-400 border-emerald-100'
+                              }`}
+                            >
+                              {callNum}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Amount */}
+                      <span className="text-base font-black text-gray-900">₹{o.sub_total || 0}</span>
+
+                      {/* Verification / Order Booked Tag */}
+                      <button
+                        type="button"
+                        onClick={() => !o.sent_to_verification && handleSendToVerification(o._id)}
+                        disabled={doneLoading === String(o._id) || !!o.sent_to_verification}
+                        className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${
+                          o.sent_to_verification
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 cursor-default'
+                            : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-500 hover:text-white'
+                        }`}
+                      >
+                        {o.sent_to_verification ? '✓ ORDER BOOKED' : doneLoading === String(o._id) ? '...' : 'VERIFICATION'}
+                      </button>
+
+                      {/* Action buttons */}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openPrescriptionModal(o); }}
+                        className="px-2.5 py-2 flex items-center gap-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 text-[10px] font-black tracking-wider transition-all shadow-sm shrink-0"
+                        title="View Doctor Prescription (Rx)"
+                      >
+                        <span>📋 Rx</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSelect(o)}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 text-gray-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm shrink-0"
+                        title="View Details"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
           {totalPages > 1 && (
@@ -1185,11 +1441,41 @@ export default function ShipmaxxFollowup() {
                         {noteSaving ? 'SAVING...' : 'ADD NOTE'}
                       </button>
                     </div>
-                    <div className="mt-4">
-                      <button onClick={openBookAppointment}
-                        className="w-full py-3.5 rounded-xl text-[10px] font-black text-white shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 hover:opacity-95 tracking-widest"
-                        style={{ background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)' }}>
-                        BOOK DOCTOR APPOINTMENT
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {/* Button 1: Book Doctor Appointment */}
+                      <button
+                        onClick={openBookAppointment}
+                        className="group relative overflow-hidden py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs tracking-wider shadow-md hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:bg-white/30 transition-colors">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                          <span className="text-[10px] font-black uppercase tracking-wider truncate">Book Appointment</span>
+                        </div>
+                        <svg className="w-3.5 h-3.5 text-blue-200 group-hover:translate-x-0.5 transition-transform shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                      </button>
+
+                      {/* Button 2: View Prescription (Rx) */}
+                      <button
+                        onClick={() => openPrescriptionModal(selected)}
+                        className="group relative overflow-hidden py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs tracking-wider shadow-md hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:bg-white/30 transition-colors">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <span className="text-[10px] font-black uppercase tracking-wider truncate">View Prescription (Rx)</span>
+                        </div>
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-white/20 text-white shrink-0">
+                          Rx
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -1231,9 +1517,9 @@ export default function ShipmaxxFollowup() {
                   <div className="mt-3 space-y-2">
                     {activityLoading ? (
                       <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 text-xs font-bold text-gray-400">Loading activity...</div>
-                    ) : activity.length === 0 ? (
+                    ) : activity.filter(item => item.title !== 'Note Added' && item.title !== 'NOTE ADDED').length === 0 ? (
                       <div className="bg-white rounded-xl border border-dashed border-gray-200 px-4 py-3 text-xs font-bold text-gray-400">No activity recorded yet</div>
-                    ) : activity.map(item => (
+                    ) : activity.filter(item => item.title !== 'Note Added' && item.title !== 'NOTE ADDED').map(item => (
                       <div key={item._id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-sm">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                           <p className="text-xs font-black text-gray-800 uppercase tracking-wider">{item.title}</p>
@@ -1502,6 +1788,12 @@ export default function ShipmaxxFollowup() {
           </div>
         </div>
       )}
+      {/* ── Prescription Modal ── */}
+      <PrescriptionModal
+        isOpen={rxModalOpen}
+        onClose={() => setRxModalOpen(false)}
+        patientData={selectedRxOrder}
+      />
     </div>
   );
 }

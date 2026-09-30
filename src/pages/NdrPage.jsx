@@ -431,45 +431,93 @@ function NdrActionPanel({ prefillAwb, prefillAction }) {
   );
 }
 
+const MONTHS = [
+  { value: 'all', label: 'All Months' },
+  { value: '1',  label: 'January' },
+  { value: '2',  label: 'February' },
+  { value: '3',  label: 'March' },
+  { value: '4',  label: 'April' },
+  { value: '5',  label: 'May' },
+  { value: '6',  label: 'June' },
+  { value: '7',  label: 'July' },
+  { value: '8',  label: 'August' },
+  { value: '9',  label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+];
+
+const currentYearNum = new Date().getFullYear();
+const YEARS = [
+  { value: 'all', label: 'All Years' },
+  ...Array.from({ length: 5 }, (_, i) => {
+    const y = String(currentYearNum - i);
+    return { value: y, label: y };
+  })
+];
+
 // ── NDR Notes Panel ───────────────────────────────────────────────────────────
 function NdrNotesPanel() {
   const [notes, setNotes]       = useState([]);
   const [loading, setLoading]   = useState(false);
   const [filterDate, setFilterDate] = useState('');
   const [search, setSearch]     = useState('');
-  const [form, setForm]         = useState({ name: '', phone_number: '', reason: '', awb_number: '', date: new Date().toISOString().split('T')[0] });
+  const [rangeFilter, setRangeFilter] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [selectedYear, setSelectedYear]   = useState('all');
+  const [form, setForm]         = useState({ name: '', phone_number: '', reason: '', awb_number: '', price: '', date: new Date().toISOString().split('T')[0] });
   const [editId, setEditId]     = useState(null);
   const [error, setError]       = useState('');
   const [saving, setSaving]     = useState(false);
 
-  const fetchNotes = useCallback((date = filterDate, q = search) => {
+  const fetchNotes = useCallback((date = filterDate, q = search, range = rangeFilter, m = selectedMonth, y = selectedYear) => {
     setLoading(true);
     const params = {};
-    if (date) params.date = date;
-    if (q)    params.search = q;
+    if (date) {
+      params.date = date;
+    } else if (m !== 'all' || y !== 'all') {
+      if (m !== 'all') params.month = m;
+      if (y !== 'all') params.year = y;
+    } else if (range && range !== 'all') {
+      params.range = range;
+    }
+    if (q) params.search = q;
+    if (range === 'all' && !date && m === 'all' && y === 'all') params.all = 'true';
     srSvc.getNdrNotes(params)
       .then(r => setNotes(r.data?.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filterDate, search]);
+  }, [filterDate, search, rangeFilter, selectedMonth, selectedYear]);
 
   useEffect(() => { fetchNotes(); }, []);
 
   const save = async () => {
-    const { name, phone_number, reason, awb_number } = form;
+    const { name, phone_number, reason, awb_number, price } = form;
     if (!name || !phone_number || !reason || !awb_number) {
-      setError('All fields are required'); return;
+      setError('All fields except price are required'); return;
     }
     setSaving(true); setError('');
     try {
       if (editId) {
-        await srSvc.updateNdrNote(editId, { name, phone_number, reason, awb_number });
+        const res = await srSvc.updateNdrNote(editId, { name, phone_number, reason, awb_number, price: price !== '' ? Number(price) : null });
+        const updated = res.data?.data || res.data;
+        if (updated && updated._id) {
+          setNotes(prev => prev.map(n => n._id === updated._id ? { ...n, ...updated } : n));
+        }
         setEditId(null);
       } else {
-        await srSvc.createNdrNote({ name, phone_number, reason, awb_number });
+        const res = await srSvc.createNdrNote({ name, phone_number, reason, awb_number, price: price !== '' ? Number(price) : null });
+        const newNote = res.data?.data || res.data;
+        if (newNote && newNote._id) {
+          setNotes(prev => [newNote, ...prev.filter(n => n._id !== newNote._id)]);
+        }
+        setFilterDate('');
+        setRangeFilter('all');
+        setSelectedMonth('all');
+        setSelectedYear('all');
+        fetchNotes('', search, 'all', 'all', 'all');
       }
-      setForm({ name: '', phone_number: '', reason: '', awb_number: '', date: new Date().toISOString().split('T')[0] });
-      fetchNotes();
+      setForm({ name: '', phone_number: '', reason: '', awb_number: '', price: '', date: new Date().toISOString().split('T')[0] });
     } catch (e) {
       setError(e?.response?.data?.message || e.message);
     } finally {
@@ -485,7 +533,7 @@ function NdrNotesPanel() {
 
   const startEdit = (note) => {
     setEditId(note._id);
-    setForm({ name: note.name, phone_number: note.phone_number, reason: note.reason, awb_number: note.awb_number, date: '' });
+    setForm({ name: note.name, phone_number: note.phone_number, reason: note.reason, awb_number: note.awb_number, price: note.price !== undefined && note.price !== null ? note.price : '', date: '' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -497,7 +545,7 @@ function NdrNotesPanel() {
         <div className="px-5 py-3 border-b border-gray-100">
           <span className="font-semibold text-gray-700 text-sm">{editId ? 'Edit Note' : 'Add New Note'}</span>
         </div>
-        <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <Field label="Customer Name *">
             <input className={inp} placeholder="Name" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
           </Field>
@@ -506,6 +554,9 @@ function NdrNotesPanel() {
           </Field>
           <Field label="AWB Number *">
             <input className={inp} placeholder="AWB" value={form.awb_number} onChange={e => setForm(p => ({ ...p, awb_number: e.target.value }))} />
+          </Field>
+          <Field label="Price (₹)">
+            <input type="number" className={inp} placeholder="Price" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} />
           </Field>
           <Field label="Reason / Note *">
             <input className={inp} placeholder="Reason" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} />
@@ -517,7 +568,7 @@ function NdrNotesPanel() {
             {saving ? 'Saving…' : editId ? 'Update Note' : '+ Add Note'}
           </button>
           {editId && (
-            <button onClick={() => { setEditId(null); setForm({ name: '', phone_number: '', reason: '', awb_number: '', date: '' }); }}
+            <button onClick={() => { setEditId(null); setForm({ name: '', phone_number: '', reason: '', awb_number: '', price: '', date: '' }); }}
               className="px-5 py-2.5 rounded-xl bg-gray-200 text-gray-600 text-sm font-bold hover:bg-gray-300 transition">
               Cancel
             </button>
@@ -530,19 +581,78 @@ function NdrNotesPanel() {
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
         <div className="h-1 bg-yellow-400" />
         <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
-          <span className="font-semibold text-gray-700 text-sm flex-1">
+          <span className="font-semibold text-gray-700 text-sm flex-1 min-w-[140px]">
             Notes {notes.length > 0 && <span className="text-xs text-gray-400 font-normal ml-1">({notes.length})</span>}
           </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[
+              { id: 'all',       label: 'All' },
+              { id: 'today',     label: 'Today' },
+              { id: 'yesterday', label: 'Yesterday' },
+            ].map(r => {
+              const active = rangeFilter === r.id && !filterDate && selectedMonth === 'all' && selectedYear === 'all';
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    setFilterDate('');
+                    setSelectedMonth('all');
+                    setSelectedYear('all');
+                    setRangeFilter(r.id);
+                    fetchNotes('', search, r.id, 'all', 'all');
+                  }}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition border ${
+                    active
+                      ? 'bg-yellow-500 text-white border-yellow-500 shadow-sm'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              );
+            })}
+
+            {/* Month Select */}
+            <select
+              value={selectedMonth}
+              onChange={e => {
+                const m = e.target.value;
+                setSelectedMonth(m);
+                setFilterDate('');
+                setRangeFilter('custom');
+                fetchNotes('', search, 'custom', m, selectedYear);
+              }}
+              className="border border-gray-200 rounded-xl px-2.5 py-1 text-xs bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-yellow-400"
+            >
+              {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+
+            {/* Year Select */}
+            <select
+              value={selectedYear}
+              onChange={e => {
+                const y = e.target.value;
+                setSelectedYear(y);
+                setFilterDate('');
+                setRangeFilter('custom');
+                fetchNotes('', search, 'custom', selectedMonth, y);
+              }}
+              className="border border-gray-200 rounded-xl px-2.5 py-1 text-xs bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-yellow-400"
+            >
+              {YEARS.map(y => <option key={y.value} value={y.value}>{y.label}</option>)}
+            </select>
+          </div>
           <input placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && fetchNotes(filterDate, search)}
-            className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-yellow-400 w-36" />
-          <input type="date" value={filterDate} onChange={e => { setFilterDate(e.target.value); fetchNotes(e.target.value, search); }}
+            onKeyDown={e => e.key === 'Enter' && fetchNotes(filterDate, search, rangeFilter, selectedMonth, selectedYear)}
+            className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-yellow-400 w-32" />
+          <input type="date" value={filterDate} onChange={e => { setFilterDate(e.target.value); setRangeFilter('custom'); fetchNotes(e.target.value, search, 'custom', selectedMonth, selectedYear); }}
             className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-yellow-400" />
-          {filterDate && (
-            <button onClick={() => { setFilterDate(''); fetchNotes('', search); }}
-              className="text-xs text-gray-400 hover:text-gray-600 font-semibold">Clear</button>
+          {(filterDate || search || rangeFilter !== 'all' || selectedMonth !== 'all' || selectedYear !== 'all') && (
+            <button onClick={() => { setFilterDate(''); setSearch(''); setRangeFilter('all'); setSelectedMonth('all'); setSelectedYear('all'); fetchNotes('', '', 'all', 'all', 'all'); }}
+              className="text-xs text-gray-400 hover:text-gray-600 font-semibold">Reset</button>
           )}
-          <button onClick={() => fetchNotes(filterDate, search)}
+          <button onClick={() => fetchNotes(filterDate, search, rangeFilter, selectedMonth, selectedYear)}
             className="px-4 py-1.5 rounded-xl bg-yellow-500 text-white text-xs font-bold hover:bg-yellow-600 transition">
             {loading ? '…' : 'Refresh'}
           </button>
@@ -557,21 +667,26 @@ function NdrNotesPanel() {
             {/* Desktop table */}
             <table className="hidden sm:table w-full text-sm">
               <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0">
-                <tr>{['Date', 'Name', 'Phone', 'AWB', 'Reason', 'By', 'Actions'].map(h => (
+                <tr>{['S.N', 'Date', 'Name', 'Phone', 'AWB', 'Price', 'Reason', 'By', 'Actions'].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>
                 ))}</tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {notes.map(n => (
+                {notes.map((n, idx) => (
                   <tr key={n._id} className="hover:bg-yellow-50/30 transition-colors">
+                    <td className="px-4 py-3 text-[11px] text-gray-500 font-bold whitespace-nowrap">
+                      {idx + 1}
+                    </td>
                     <td className="px-4 py-3 text-[11px] text-gray-400 font-medium whitespace-nowrap">
                       {new Date(n.createdAt).toLocaleDateString('en-IN')}
                     </td>
                     <td className="px-4 py-3 font-semibold text-gray-800 text-[13px]">{n.name}</td>
                     <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{n.phone_number}</td>
-                    <td className="px-4 py-3">
-                      <a href={`https://shiprocket.co/tracking/${n.awb_number}`} target="_blank" rel="noreferrer"
-                        className="font-mono text-[11px] text-blue-600 font-bold hover:underline">{n.awb_number}</a>
+                    <td className="px-4 py-3 font-mono text-[11px] text-gray-700 font-semibold whitespace-nowrap">
+                      {n.awb_number}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-gray-800 text-[12px] whitespace-nowrap">
+                      {n.price !== undefined && n.price !== null && n.price !== '' ? `₹${n.price}` : '—'}
                     </td>
                     <td className="px-4 py-3 text-[12px] text-gray-600 max-w-[220px] truncate" title={n.reason}>{n.reason}</td>
                     <td className="px-4 py-3 text-[11px] text-gray-500">{n.createdBy?.name || '—'}</td>
@@ -580,10 +695,6 @@ function NdrNotesPanel() {
                         <button onClick={() => startEdit(n)}
                           className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-500 hover:text-white transition border border-blue-100">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                        </button>
-                        <button onClick={() => deleteNote(n._id)}
-                          className="w-8 h-8 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition border border-red-100">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                         </button>
                       </div>
                     </td>
@@ -604,13 +715,13 @@ function NdrNotesPanel() {
                     <p className="text-[10px] text-gray-400 shrink-0">{new Date(n.createdAt).toLocaleDateString('en-IN')}</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-3 text-xs space-y-1">
-                    <p><span className="font-bold text-gray-400">AWB:</span> <a href={`https://shiprocket.co/tracking/${n.awb_number}`} target="_blank" rel="noreferrer" className="text-blue-600 font-mono font-bold hover:underline">{n.awb_number}</a></p>
+                    <p><span className="font-bold text-gray-400">AWB:</span> <span className="font-mono text-gray-700 font-semibold">{n.awb_number}</span></p>
+                    <p><span className="font-bold text-gray-400">Price:</span> {n.price !== undefined && n.price !== null && n.price !== '' ? `₹${n.price}` : '—'}</p>
                     <p><span className="font-bold text-gray-400">Reason:</span> {n.reason}</p>
                     <p><span className="font-bold text-gray-400">By:</span> {n.createdBy?.name || '—'}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => startEdit(n)} className="flex-1 text-[11px] font-bold py-2 rounded-xl bg-blue-50 text-blue-600 border border-blue-100">Edit</button>
-                    <button onClick={() => deleteNote(n._id)} className="flex-1 text-[11px] font-bold py-2 rounded-xl bg-red-50 text-red-600 border border-red-100">Delete</button>
+                    <button onClick={() => startEdit(n)} className="w-full text-[11px] font-bold py-2 rounded-xl bg-blue-50 text-blue-600 border border-blue-100">Edit</button>
                   </div>
                 </div>
               ))}
