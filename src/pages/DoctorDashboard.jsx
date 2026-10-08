@@ -190,10 +190,6 @@ export default function DoctorDashboard() {
     setCompletedDispatchIds(updated);
     try {
       localStorage.setItem('doctor_completed_dispatches', JSON.stringify(updated));
-      await smxSvc.completeFollowUp(idStr, { notes: 'Marked completed from Doctor Dashboard' }).catch(() => {});
-      if (rawIdStr && rawIdStr !== idStr) {
-        await smxSvc.completeFollowUp(rawIdStr, { notes: 'Marked completed from Doctor Dashboard' }).catch(() => {});
-      }
       await API.patch(`/ready-to-shipment/${idStr}`, { status: 'completed', is_completed: true, completed: true }).catch(() => {});
       if (rawIdStr && rawIdStr !== idStr) {
         await API.patch(`/ready-to-shipment/${rawIdStr}`, { status: 'completed', is_completed: true, completed: true }).catch(() => {});
