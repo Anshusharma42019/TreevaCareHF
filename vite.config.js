@@ -8,7 +8,12 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    babel({ presets: [reactCompilerPreset()] })
+    babel({
+      include: [/src\/.*\.[jt]sx?$/],
+      exclude: [/node_modules/],
+      sourceMap: false,
+      presets: [reactCompilerPreset()]
+    })
   ],
   server: {
     proxy: {
