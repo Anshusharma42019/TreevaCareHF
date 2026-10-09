@@ -1253,7 +1253,7 @@ export default function Shipmaxx() {
   const goStep = (i) => { setStep(i); setResult(null); setError(''); };
 
   useEffect(() => {
-    api.get('/shiprocket/next-order-id').then(res => {
+    api.get('/shipmaxx/next-order-id').then(res => {
       setOrder(p => ({ ...p, order_number: res.data.data.order_id }));
     }).catch(() => {});
 

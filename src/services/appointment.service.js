@@ -87,9 +87,9 @@ export const searchByPhone = async (phone) => {
     } catch (e) { console.warn('appointment search failed', e?.message); }
   }
 
-  // 3. Search Shiprocket orders (always run to get medicineDeliveryDate + fill missing address)
+  // 3. Search ShipMaxx orders (always run to get medicineDeliveryDate + fill missing address)
   try {
-    const { data } = await API.get('/shiprocket/orders/search-by-phone', { params: { phone: clean } });
+    const { data } = await API.get('/shipmaxx/orders/search-by-phone', { params: { phone: clean } });
     if (data?.data) {
       const o = data.data;
       const deliveryDate = o.deliveredAt ? new Date(o.deliveredAt).toISOString().split('T')[0] : '';
@@ -109,7 +109,7 @@ export const searchByPhone = async (phone) => {
         patientType: 'old',
       };
     }
-  } catch (e) { console.warn('shiprocket search failed', e?.message); }
+  } catch (e) { console.warn('shipmaxx search failed', e?.message); }
 
   return result;
 };

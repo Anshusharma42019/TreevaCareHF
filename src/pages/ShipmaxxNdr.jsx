@@ -118,8 +118,8 @@ function NdrDetailPanel({ ndr, onClose, onUseAwb }) {
 function NdrList({ department: externalDept, setDepartment: externalSetDept, onSelectNdr, onUseAwb }) {
   const [ndrs, setNdrs] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [from, setFrom] = useState(() => new Date().toISOString().split('T')[0]);
-  const [to, setTo]     = useState(() => new Date().toISOString().split('T')[0]);
+  const [from, setFrom] = useState('');
+  const [to, setTo]     = useState('');
   const [department, setDepartment] = useState(externalDept || 'all');
 
   useEffect(() => {
@@ -138,12 +138,14 @@ function NdrList({ department: externalDept, setDepartment: externalSetDept, onS
       .then(r => {
         let rawData = r.data?.data;
         while (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+          if (Array.isArray(rawData.shipments)) { rawData = rawData.shipments; break; }
           if (Array.isArray(rawData.data)) { rawData = rawData.data; break; }
           if (Array.isArray(rawData.items)) { rawData = rawData.items; break; }
           if (rawData.data !== undefined) { rawData = rawData.data; }
           else { break; }
         }
-        setNdrs(Array.isArray(rawData) ? rawData : []);
+        const finalArr = Array.isArray(rawData) ? rawData : (Array.isArray(r.data?.shipments) ? r.data.shipments : []);
+        setNdrs(finalArr);
       })
       .catch(() => setNdrs([]))
       .finally(() => setLoading(false));
@@ -809,7 +811,33 @@ export default function ShipmaxxNdr() {
         </div>
       </div>
 
-      {tab === 'board'  && <OrderStatusBoard platform="shipmaxx" title="ShipMaxx Undelivered Orders" department={department} defaultStatus="UNDELIVERED_1ST_ATTEMPT" allowedStatuses={['NEW', 'PICKUP_SCHEDULED', 'SHIPMENT_BOOKED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'UNDELIVERED_1ST_ATTEMPT', 'UNDELIVERED_2ND_ATTEMPT', 'UNDELIVERED_3RD_ATTEMPT', 'UNDELIVERED']} />}
+      {tab === 'board'  && (
+        <OrderStatusBoard
+          platform="shipmaxx"
+          title="ShipMaxx Orders Status Board"
+          department={department}
+          defaultPreset="all"
+          defaultStatus="IN_TRANSIT"
+          allowedStatuses={[
+            'NEW',
+            'PICKUP_SCHEDULED',
+            'OUT_FOR_PICKUP',
+            'SHIPPED',
+            'IN_TRANSIT',
+            'OUT_FOR_DELIVERY',
+            'DELIVERED',
+            'UNDELIVERED_1ST_ATTEMPT',
+            'UNDELIVERED_2ND_ATTEMPT',
+            'UNDELIVERED_3RD_ATTEMPT',
+            'UNDELIVERED',
+            'DELIVERY_EXCEPTION',
+            'RTO_INITIATED',
+            'RTO_INTRANSIT',
+            'RTO_DELIVERED',
+            'CANCELLED'
+          ]}
+        />
+      )}
       {tab === 'list'   && <NdrList department={department} setDepartment={setDepartment} onSelectNdr={() => {}} onUseAwb={handleUseAwb} />}
       {tab === 'action' && <NdrActionPanel prefillAwb={actionAwb} prefillAction={actionType} />}
       {tab === 'notes'  && <NdrNotesPanel />}

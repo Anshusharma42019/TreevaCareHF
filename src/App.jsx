@@ -17,9 +17,6 @@ const Users = lazy(() => import('./pages/Users'));
 const CNP = lazy(() => import('./pages/CNP'));
 const Verification = lazy(() => import('./pages/Verification'));
 const ReadyToShipment = lazy(() => import('./pages/ReadyToShipment'));
-const Shiprocket = lazy(() => import('./pages/Shiprocket'));
-const NdrDetail = lazy(() => import('./pages/NdrDetail'));
-const FollowUp = lazy(() => import('./pages/FollowUp'));
 const CallAgain = lazy(() => import('./pages/CallAgain'));
 const Attendance = lazy(() => import('./pages/Attendance'));
 const OrderDetail = lazy(() => import('./pages/OrderDetail'));
@@ -27,7 +24,6 @@ const AppointmentBook = lazy(() => import('./pages/AppointmentBook'));
 const DoctorDashboard = lazy(() => import('./pages/DoctorDashboard'));
 const ReorderCommission = lazy(() => import('./pages/ReorderCommission'));
 const Shipmaxx = lazy(() => import('./pages/Shipmaxx'));
-const NdrPage = lazy(() => import('./pages/NdrPage'));
 const ShipmaxxNdr = lazy(() => import('./pages/ShipmaxxNdr'));
 const ShipmaxxFollowup = lazy(() => import('./pages/ShipmaxxFollowup'));
 const Whatsapp = lazy(() => import('./pages/Whatsapp'));
@@ -79,7 +75,7 @@ function AppRoutes() {
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'doctor', 'support']}><AppointmentBook /></ProtectedRoute>
         } />
         <Route path="follow-up" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support']}><FollowUp /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics']}><ShipmaxxFollowup /></ProtectedRoute>
         } />
         <Route path="reorder-commission" element={
           <ProtectedRoute roles={['admin']}>
@@ -92,24 +88,8 @@ function AppRoutes() {
         <Route path="ready-to-shipment" element={
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><ReadyToShipment /></ProtectedRoute>
         } />
-        <Route path="shiprocket" element={
-          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><Shiprocket /></ProtectedRoute>
-        } />
-        <Route path="shiprocket/orders" element={
-          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><Shiprocket initialSection="orders" /></ProtectedRoute>
-        } />
-        <Route path="shiprocket/shipments" element={
-          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><Shiprocket initialSection="shipments" /></ProtectedRoute>
-        } />
-        <Route path="shiprocket/returns" element={
-          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><Shiprocket initialSection="returns" initialReturnsTab="returns" /></ProtectedRoute>
-        } />
-        <Route path="shiprocket/ndr" element={
-          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><NdrPage /></ProtectedRoute>
-        } />
-        <Route path="shiprocket/ndr/detail" element={
-          <ProtectedRoute roles={['admin', 'manager', 'logistics']}><NdrDetail /></ProtectedRoute>
-        } />
+        <Route path="shiprocket/*" element={<Navigate to="/shipmaxx" replace />} />
+        <Route path="shiprocket" element={<Navigate to="/shipmaxx" replace />} />
         <Route path="shipmaxx" element={
           <ProtectedRoute roles={['admin', 'manager', 'logistics', 'support']}><Shipmaxx /></ProtectedRoute>
         } />

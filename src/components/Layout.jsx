@@ -20,12 +20,9 @@ const PAGE_TITLES = {
   '/tasks': 'Tasks',
   '/verification': 'Verification',
   '/ready-to-shipment': 'Ready to Shipment',
-  '/shiprocket': 'Shiprocket',
-  '/shiprocket/orders': 'Orders',
-  '/shiprocket/shipments': 'Shipments & Tracking',
-  '/shiprocket/returns': 'Returns / Wallet / NDR',
-  '/shiprocket/ndr': 'NDR',
-  '/shiprocket/ndr/detail': 'NDR Details',
+  '/shipmaxx': 'ShipMaxx',
+  '/shipmaxx/ndr': 'ShipMaxx NDR',
+  '/shipmaxx/followup': 'ShipMaxx Follow Up',
   '/notifications': 'Notifications',
   '/users': 'Staff',
   '/staff-activity': 'Staff Activity & Delivery Hub',
@@ -910,7 +907,7 @@ export default function Layout() {
                   ))}
                 </div>
                 <div className="px-6 py-4 border-t border-gray-50 shrink-0">
-                  <button onClick={() => { setQuickDetail(null); navigate(`/shiprocket/orders?openId=${quickDetail.data._id}`); }}
+                  <button onClick={() => { setQuickDetail(null); navigate(`/shipmaxx?openId=${quickDetail.data._id}`); }}
                     className="w-full py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
                     style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>

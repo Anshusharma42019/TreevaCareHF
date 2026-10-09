@@ -12,8 +12,8 @@ export const createOrder        = (body)           => api.post(`${BASE}/orders/c
 export const updateOrder        = (order_id, body) => api.put(`${BASE}/orders/${order_id}`, body);
 export const getDeliveredOrders = (params)         => api.get(`${BASE}/orders/delivered`, { params });
 export const getDeliveredOrdersFromSchema  = (params) => api.get(`${BASE}/orders/delivered-schema`, { params });
-export const getInTransitOrdersFromSchema  = (params) => api.get(`${BASE}/orders/in-transit-schema`, { params });
 export const searchOrderByPhone = (phone)          => api.get(`${BASE}/orders/search-by-phone`, { params: { phone } });
+export const getLocalOrderLookup = (params)         => getOrder(params._id || params.order_id);
 
 // ── Shipping ──────────────────────────────────────────────────────────────────
 export const createShipment = (body) => api.post(`${BASE}/shipping/create-shipment`, body);
@@ -29,10 +29,13 @@ export const getShipmentById = (shipment_id) => api.get(`${BASE}/shipping/shipme
 export const getWarehouses   = (params) => api.get(`${BASE}/warehouses`, { params });
 export const createWarehouse = (body)   => api.post(`${BASE}/warehouses/create`, body);
 
-// ── Invoice ───────────────────────────────────────────────────────────────────
+// ── Invoice (Module 5) ────────────────────────────────────────────────────────
 export const getInvoice = (order_id) => api.get(`${BASE}/invoice/${order_id}`, { responseType: 'blob' });
 
-// ── NDR & NDR Notes ───────────────────────────────────────────────────────────
+// ── Bulk Download (Module 6) ──────────────────────────────────────────────────
+export const downloadBulkManifest = (identifiers) => api.post(`${BASE}/bulk-download/manifest`, { identifiers }, { responseType: 'blob' });
+
+// ── NDR & NDR Notes (Module 7) ────────────────────────────────────────────────
 export const getNdrList    = (params) => api.get(`${BASE}/ndr`, { params });
 export const ndrAction     = (ndr_id, body) => api.post(`${BASE}/ndr/${ndr_id}/action`, body);
 export const ndrBulkAction = (body)   => api.post(`${BASE}/ndr/bulk-action`, body);
@@ -41,6 +44,14 @@ export const getNdrNotes   = (params)   => api.get(`${BASE}/ndr/notes`, { params
 export const createNdrNote = (body)     => api.post(`${BASE}/ndr/notes`, body);
 export const updateNdrNote = (id, body) => api.put(`${BASE}/ndr/notes/${id}`, body);
 export const deleteNdrNote = (id)       => api.delete(`${BASE}/ndr/notes/${id}`);
+
+// ── Weight Disputes (Module 8) ────────────────────────────────────────────────
+export const getWeightDisputes       = (params)           => api.get(`${BASE}/weight-disputes`, { params });
+export const getWeightDisputeHistory = (dispute_id)       => api.get(`${BASE}/weight-disputes/${dispute_id}/history`);
+export const acceptWeightDispute     = (dispute_id)       => api.post(`${BASE}/weight-disputes/${dispute_id}/accept`, {});
+export const rejectWeightDispute     = (dispute_id, data) => api.post(`${BASE}/weight-disputes/${dispute_id}/reject`, data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
 
 // ── Stats & Board ─────────────────────────────────────────────────────────────
 export const getDeliveredStats = (params) => api.get(`${BASE}/orders/stats`, { params });

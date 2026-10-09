@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { getOrder as fetchShipmaxxOrder, sendToVerification as smSendToVerification } from '../services/shipmaxx.service';
-import { getOrder as fetchShiprocketOrder, sendToVerification as srSendToVerification } from '../services/shiprocket.service';
 import { submitRtoVerification } from '../services/opsDashboard.service';
 import { useToast } from '../context/ToastContext';
 
@@ -20,14 +19,8 @@ export default function RtoVerificationModal({ isOpen, onClose, shipment, onSucc
     setLoading(true);
     setDetails(null);
     try {
-      let data;
-      if (shipment.platform === 'shipmaxx') {
-        const res = await fetchShipmaxxOrder(shipment.order_id);
-        data = res.data?.data || res.data;
-      } else {
-        const res = await fetchShiprocketOrder(shipment.order_id);
-        data = res.data?.data || res.data;
-      }
+      const res = await fetchShipmaxxOrder(shipment.order_id);
+      const data = res.data?.data || res.data;
       setDetails(data);
     } catch (err) {
       console.error(err);
@@ -59,11 +52,7 @@ export default function RtoVerificationModal({ isOpen, onClose, shipment, onSucc
   const handleSendToVerification = async () => {
     setSubmitting(true);
     try {
-      if (shipment.platform === 'shipmaxx') {
-        await smSendToVerification(shipment._id, { source: 'rto' });
-      } else {
-        await srSendToVerification(shipment._id, { source: 'rto' });
-      }
+      await smSendToVerification(shipment._id, { source: 'rto' });
       success('Order moved back to Verification list');
       if (onSuccess) onSuccess(shipment.order_id, 'send_to_verification');
       onClose();

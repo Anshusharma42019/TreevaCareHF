@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import * as srSvc from '../services/shiprocket.service';
 import * as smxSvc from '../services/shipmaxx.service';
 
 const cardCls = 'bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow';
@@ -59,6 +58,8 @@ const STATUS_STYLES = {
   RTO_DELIVERED: 'border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/60 text-blue-800 shadow-[0_4px_12px_-2px_rgba(59,130,246,0.15)] hover:shadow-[0_8px_24px_-4px_rgba(59,130,246,0.3)] hover:-translate-y-1 hover:border-blue-300',
   IN_TRANSIT: 'border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/60 text-amber-800 shadow-[0_4px_12px_-2px_rgba(245,158,11,0.15)] hover:shadow-[0_8px_24px_-4px_rgba(245,158,11,0.3)] hover:-translate-y-1 hover:border-amber-300',
   SHIPMENT_CANCELLED: 'border-red-200 bg-gradient-to-br from-red-50 to-red-100/60 text-red-800 shadow-[0_4px_12px_-2px_rgba(239,68,68,0.15)] hover:shadow-[0_8px_24px_-4px_rgba(239,68,68,0.3)] hover:-translate-y-1 hover:border-red-300',
+  CANCELLED: 'border-red-200 bg-gradient-to-br from-red-50 to-red-100/60 text-red-800 shadow-[0_4px_12px_-2px_rgba(239,68,68,0.15)] hover:shadow-[0_8px_24px_-4px_rgba(239,68,68,0.3)] hover:-translate-y-1 hover:border-red-300',
+  CANCELED: 'border-red-200 bg-gradient-to-br from-red-50 to-red-100/60 text-red-800 shadow-[0_4px_12px_-2px_rgba(239,68,68,0.15)] hover:shadow-[0_8px_24px_-4px_rgba(239,68,68,0.3)] hover:-translate-y-1 hover:border-red-300',
   SHIPMENT_BOOKED: 'border-sky-200 bg-gradient-to-br from-sky-50 to-sky-100/60 text-sky-800 shadow-[0_4px_12px_-2px_rgba(14,165,233,0.15)] hover:shadow-[0_8px_24px_-4px_rgba(14,165,233,0.3)] hover:-translate-y-1 hover:border-sky-300',
   RTO_INTRANSIT: 'border-violet-200 bg-gradient-to-br from-violet-50 to-violet-100/60 text-violet-800 shadow-[0_4px_12px_-2px_rgba(139,92,246,0.15)] hover:shadow-[0_8px_24px_-4px_rgba(139,92,246,0.3)] hover:-translate-y-1 hover:border-violet-300',
   OUT_FOR_DELIVERY: 'border-cyan-200 bg-gradient-to-br from-cyan-50 to-cyan-100/60 text-cyan-800 shadow-[0_4px_12px_-2px_rgba(6,182,212,0.15)] hover:shadow-[0_8px_24px_-4px_rgba(6,182,212,0.3)] hover:-translate-y-1 hover:border-cyan-300',
@@ -115,7 +116,7 @@ const SMX_MAP = {
   PCN: 'PICKUP_CANCELLED',
   PKD: 'PICKUP_DONE',
   PKF: 'PICKUP_FAILED',
-  RRA: 'RTO_INITIATED',
+  RRA: 'RTO_INTRANSIT',
   RTD: 'RTO_DELIVERED',
   RTO: 'RTO_INITIATED',
   RUN: 'RTO_INITIATED',
@@ -195,16 +196,16 @@ const getDateParams = (preset, customFrom, customTo) => {
 export default function OrderStatusBoard({
   title = 'Order Status',
   subtitle,
-  defaultPreset = 'today',
+  defaultPreset = 'all',
   defaultStatus = 'DELIVERED',
   onStatsChange,
   filterParams,
-  platform = 'shiprocket',
+  platform = 'shipmaxx',
   allowedStatuses,
   department: externalDept,
 }) {
   const { t } = useLanguage();
-  const svc = platform === 'shipmaxx' ? smxSvc : srSvc;
+  const svc = smxSvc;
   const [fastPoll, setFastPoll] = useState(false);
   const [department, setDepartment] = useState(externalDept || 'all');
   const [deliveredStats, setDeliveredStats] = useState({ count: 0, revenue: 0, statusBreakdown: [] });
@@ -253,24 +254,10 @@ export default function OrderStatusBoard({
   }, [svc]);
 
   useEffect(() => {
-    if (externalDept !== undefined) {
+    if (externalDept !== undefined && externalDept !== department) {
       setDepartment(externalDept);
-      const params = getDateParams(datePreset, filterFrom, filterTo);
-      params.department = externalDept;
-      loadDelivered(params);
-      if (selectedStatus) loadStatusOrders(selectedStatus, params);
     }
-  }, [externalDept, datePreset, filterFrom, filterTo, loadDelivered, loadStatusOrders, selectedStatus]);
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (!e.target.closest('.order-status-interactive')) {
-        setSelectedStatus('');
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [externalDept, department]);
 
   // Effective parameters: either passed from prop or generated from local state
   const getParams = useCallback(() => {
@@ -281,29 +268,30 @@ export default function OrderStatusBoard({
     return base;
   }, [filterParams, datePreset, filterFrom, filterTo, department]);
 
-  // Load delivered stats and status orders whenever params or selected status change
+  // Load delivered stats whenever filter params change (NOT on selectedStatus change)
   useEffect(() => {
     const params = getParams();
-    
-    // For local custom filter, only auto-load if dates are provided
     if (!filterParams && datePreset === 'custom' && (!filterFrom || !filterTo)) return;
 
     loadDelivered(params);
-    if (selectedStatus) {
-      loadStatusOrders(selectedStatus, params);
-    }
-    
-    // Auto-refresh stats and selected status orders silently
-    // If fastPoll is active (e.g. immediately after a sync), poll every 3 seconds to show live updates
+
     const interval = setInterval(() => {
       loadDelivered(params);
       if (selectedStatus) {
         loadStatusOrders(selectedStatus, params, true);
       }
     }, fastPoll ? 3000 : 15000);
-    
+
     return () => clearInterval(interval);
-  }, [getParams, selectedStatus, filterParams, datePreset, loadDelivered, loadStatusOrders, fastPoll]);
+  }, [getParams, filterParams, datePreset, filterFrom, filterTo, loadDelivered, fastPoll, selectedStatus, loadStatusOrders]);
+
+  // Load status orders when selectedStatus or params change
+  useEffect(() => {
+    if (!selectedStatus) return;
+    const params = getParams();
+    if (!filterParams && datePreset === 'custom' && (!filterFrom || !filterTo)) return;
+    loadStatusOrders(selectedStatus, params);
+  }, [selectedStatus, getParams, filterParams, datePreset, filterFrom, filterTo, loadStatusOrders]);
 
   const handleSaveNote = async (e, mongoId) => {
     e.stopPropagation();
@@ -334,23 +322,16 @@ export default function OrderStatusBoard({
     setSyncing(true);
     setSyncMsg('');
     try {
-      if (platform === 'shipmaxx') {
-        const res = await smxSvc.syncShipmaxx();
-        if (res.data?.message && res.data.message.toLowerCase().includes('background')) {
-          setSyncMsg('Sync running... Watch the numbers update live!');
-          setFastPoll(true);
-          setTimeout(() => setFastPoll(false), 45000); // fast poll for 45 seconds
-        } else {
-          const d = res.data?.data || {};
-          const timeMsg = d.elapsed ? ` (${d.elapsed}s)` : '';
-          const warnMsg = d.timedOut ? ' ⚠ Partial sync' : '';
-          setSyncMsg(`Sync complete! Updated ${d.updatedCount || 0} orders${timeMsg}${warnMsg}`);
-        }
+      const res = await smxSvc.syncShipmaxx();
+      if (res.data?.message && res.data.message.toLowerCase().includes('background')) {
+        setSyncMsg('Sync running... Watch the numbers update live!');
+        setFastPoll(true);
+        setTimeout(() => setFastPoll(false), 45000); // fast poll for 45 seconds
       } else {
-        await srSvc.syncShiprocket();
-        const backfill = await srSvc.backfillDeliveredAt();
-        const fixed = backfill.data?.data;
-        setSyncMsg(`Sync complete! Fixed: ${fixed?.subTotalFixed || 0} amounts, ${fixed?.deliveredAtFixed || 0} dates`);
+        const d = res.data?.data || {};
+        const timeMsg = d.elapsed ? ` (${d.elapsed}s)` : '';
+        const warnMsg = d.timedOut ? ' ⚠ Partial sync' : '';
+        setSyncMsg(`Sync complete! Updated ${d.updatedCount || 0} orders${timeMsg}${warnMsg}`);
       }
       applyDateFilter();
     } catch (e) {
@@ -376,6 +357,8 @@ export default function OrderStatusBoard({
 
   const openStatusDetails = (status) => {
     setSelectedStatus(status);
+    const params = getParams();
+    loadStatusOrders(status, params);
   };
 
   const statusCounts = deliveredStats.statusBreakdown.reduce((acc, item) => {
@@ -386,8 +369,14 @@ export default function OrderStatusBoard({
 
 
   const listedStatuses = new Set(STATUS_LIST.map(normalizeStatus));
-  const rawCards = allowedStatuses
-    ? allowedStatuses.map(status => ({ status: normalizeStatus(status), count: statusCounts[normalizeStatus(status)] || 0 }))
+  const allowedSet = allowedStatuses ? new Set(allowedStatuses.map(normalizeStatus)) : null;
+  const rawCards = allowedSet
+    ? [
+        ...allowedStatuses.map(status => ({ status: normalizeStatus(status), count: statusCounts[normalizeStatus(status)] || 0 })),
+        ...deliveredStats.statusBreakdown
+          .filter(item => item._id && item.count > 0 && !allowedSet.has(normalizeStatus(item._id)))
+          .map(item => ({ status: normalizeStatus(item._id), count: item.count })),
+      ]
     : [
         ...STATUS_LIST.map(status => ({ status: normalizeStatus(status), count: statusCounts[normalizeStatus(status)] || 0 })),
         ...deliveredStats.statusBreakdown
@@ -403,10 +392,6 @@ export default function OrderStatusBoard({
   });
 
   const orderTotal = statusCards.reduce((sum, card) => sum + card.count, 0);
-
-  useEffect(() => {
-    setDatePreset(defaultPreset);
-  }, [defaultPreset]);
 
   return (
     <div className={cardCls} style={cardStyle}>
@@ -450,7 +435,7 @@ export default function OrderStatusBoard({
               </button>
             )}
             <button onClick={handleSync} disabled={syncing}
-              title="Sync from Shiprocket"
+              title="Sync from ShipMaxx"
               className={`h-10 px-4 rounded-xl text-[10px] sm:text-[11px] font-bold inline-flex items-center gap-1.5 transition active:scale-95 disabled:opacity-60 shrink-0 ${
                 syncing ? 'bg-blue-100 text-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
               }`}>
@@ -553,20 +538,20 @@ export default function OrderStatusBoard({
                 <div key={order._id}
                   className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-all">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 cursor-pointer group" onClick={() => navigate(`/orders/${order.order_id || order.shiprocket_order_id}`)}>
+                    <div className="min-w-0 cursor-pointer group" onClick={() => navigate(`/orders/${order.order_id}`)}>
                       <p className="text-xs text-gray-400 font-semibold group-hover:text-green-600 transition-colors">Order</p>
-                      <p className="text-sm font-bold text-gray-800 truncate group-hover:text-green-600 transition-colors underline decoration-dotted underline-offset-2">{order.order_id || order.shiprocket_order_id || '-'}</p>
+                      <p className="text-sm font-bold text-gray-800 truncate group-hover:text-green-600 transition-colors underline decoration-dotted underline-offset-2">{order.order_id || '-'}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${STATUS_STYLES[normalizeStatus(order.status)] || 'border-gray-200 bg-gray-50 text-gray-600'}`}>
                         {formatStatusLabel(order.status || selectedStatus)}
                       </span>
                       <div className="flex flex-col items-end">
-                        {order.status_updated_at && (
+                        {(order.delivered_at || order.status_updated_at) && (
                           <span className="text-[10px] text-gray-500 font-bold bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 whitespace-nowrap">
-                            {new Date(order.status_updated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            {new Date(order.delivered_at || order.status_updated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                             {', '}
-                            {new Date(order.status_updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {new Date(order.delivered_at || order.status_updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
                           </span>
                         )}
                         {(normalizeStatus(order.status).includes('DELIVERY') || normalizeStatus(order.status).includes('UNDELIVERED')) && order.delivery_attempt && (
@@ -607,7 +592,6 @@ export default function OrderStatusBoard({
                         ? (
                           <a 
                             href={(function() {
-                              if (platform !== 'shipmaxx') return `https://shiprocket.co/tracking/${order.awb_code}`;
                               const c = (order.courier_name || '').toLowerCase();
                               if (c.includes('shadowfax')) return `https://tracker.shadowfax.in/track?awb=${order.awb_code}`;
                               if (c.includes('delhivery')) return `https://www.delhivery.com/tracking`;

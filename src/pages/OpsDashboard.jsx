@@ -607,8 +607,7 @@ const STATUS_OPTIONS = [
 ];
 
 const PLATFORM_OPTIONS = [
-  { value: '', label: 'Both Platforms', icon: <IconGlobe size={14} /> },
-  { value: 'shiprocket', label: 'Shiprocket', icon: <IconRocket size={14} /> },
+  { value: '', label: 'All Platforms', icon: <IconGlobe size={14} /> },
   { value: 'shipmaxx', label: 'ShipMaxx', icon: <IconZap size={14} /> },
 ];
 
@@ -864,8 +863,8 @@ function ShipmentsTable({ data, filters, onFilterChange, onExportCsv, onVerifyCl
                 <td style={{ padding: '10px 10px', color: '#64748b', whiteSpace: 'nowrap', fontSize: 12, ...textStyle }}>{s.courier_name || '—'}</td>
                 <td style={{ padding: '10px 10px', ...textStyle }}>{statusChip(s.status)}</td>
                 <td style={{ padding: '10px 10px', ...textStyle }}>
-                  <span style={{ background: s.platform === 'verification' ? '#e0f2fe' : (s.platform === 'shiprocket' ? '#eff6ff' : '#f0fdf4'), color: s.platform === 'verification' ? '#0369a1' : (s.platform === 'shiprocket' ? '#2563eb' : '#16a34a'), padding: '2px 7px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
-                    {s.platform === 'verification' ? 'VER' : (s.platform === 'shiprocket' ? 'SR' : 'SM')}
+                  <span style={{ background: s.platform === 'verification' ? '#e0f2fe' : '#f0fdf4', color: s.platform === 'verification' ? '#0369a1' : '#16a34a', padding: '2px 7px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
+                    {s.platform === 'verification' ? 'VER' : 'SM'}
                   </span>
                 </td>
                 <td style={{ padding: '10px 10px', color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap', ...textStyle }}>

@@ -178,7 +178,7 @@ export default function StaffActivity() {
       );
       setStats(raw);
       setDeliveryMeta({
-        total: data._totalUniqueDelivered || 0,       // All delivered (matches ShipMaxx/Shiprocket)
+        total: data._totalUniqueDelivered || 0,       // All delivered (matches ShipMaxx)
         attributed: data._totalAttributed || 0,       // Orders linked to a staff member
         unattributed: data._totalUnattributed || 0,   // Orders with no staff link
         trueNew: data._totalTrueNew || 0,             // Actual 1st kit physical orders
@@ -278,7 +278,7 @@ export default function StaffActivity() {
     });
 
     // True total = ALL delivered orders from shipping platforms (deliveryMeta.total)
-    // This matches what you see in ShipMaxx/Shiprocket exactly
+    // This matches what you see in ShipMaxx exactly
     const totalDeliveries = deliveryMeta.total;
     const rtoRate = totalDeliveries + totalRTO > 0 
       ? Math.round((totalRTO / (totalDeliveries + totalRTO)) * 100) 

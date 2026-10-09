@@ -1133,7 +1133,7 @@ export default function Dashboard() {
                   unit="THIS MONTH"
                   icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>}
                   progressLabel={`Total orders processed & shipped this month`}
-                  onClick={canManage ? () => navigate('/shiprocket/orders') : undefined}
+                  onClick={canManage ? () => navigate('/shipmaxx') : undefined}
                 />
                 <OpsKpiCard
                   label="Monthly Delivery Rate"
@@ -1142,7 +1142,7 @@ export default function Dashboard() {
                   unit="DELIVERED"
                   icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
                   progressLabel={`${stats?.monthlyShipments?.delivered ?? 0} successfully delivered out of ${stats?.monthlyShipments?.dispatched ?? 0} dispatched`}
-                  onClick={canManage ? () => navigate('/shiprocket/orders') : undefined}
+                  onClick={canManage ? () => navigate('/shipmaxx') : undefined}
                 />
                 <OpsKpiCard
                   label="Monthly RTO Rate"
@@ -1151,7 +1151,7 @@ export default function Dashboard() {
                   unit="RTO RATE"
                   icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>}
                   progressLabel={`${stats?.monthlyShipments?.rto ?? 0} returned to origin out of ${stats?.monthlyShipments?.dispatched ?? 0} dispatched`}
-                  onClick={canManage ? () => navigate('/shiprocket-returns') : undefined}
+                  onClick={canManage ? () => navigate('/shipmaxx/ndr') : undefined}
                 />
                 <OpsKpiCard
                   label="Active In Transit"
@@ -1160,7 +1160,7 @@ export default function Dashboard() {
                   unit="IN TRANSIT"
                   icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
                   progressLabel={`${stats?.monthlyShipments?.inTransitCount ?? 0} in transit · ${stats?.monthlyShipments?.ofdCount ?? 0} out for delivery (ShipMaxx)`}
-                  onClick={canManage ? () => navigate('/shiprocket/orders') : undefined}
+                  onClick={canManage ? () => navigate('/shipmaxx') : undefined}
                 />
               </div>
             </SectionCard>
@@ -1374,7 +1374,7 @@ export default function Dashboard() {
                   unit="THIS MONTH"
                   icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>}
                   progressLabel={`Total orders processed & shipped this month`}
-                  onClick={canManage ? () => navigate('/shiprocket/orders') : undefined}
+                  onClick={canManage ? () => navigate('/shipmaxx') : undefined}
                 />
                 <OpsKpiCard
                   label="Monthly Delivery Rate"
@@ -1383,7 +1383,7 @@ export default function Dashboard() {
                   unit="DELIVERED"
                   icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
                   progressLabel={`${stats?.monthlyShipments?.delivered ?? 0} successfully delivered out of ${stats?.monthlyShipments?.dispatched ?? 0} dispatched`}
-                  onClick={canManage ? () => navigate('/shiprocket/orders') : undefined}
+                  onClick={canManage ? () => navigate('/shipmaxx') : undefined}
                 />
                 <OpsKpiCard
                   label="Monthly RTO Rate"
@@ -1392,7 +1392,7 @@ export default function Dashboard() {
                   unit="RTO RATE"
                   icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>}
                   progressLabel={`${stats?.monthlyShipments?.rto ?? 0} returned to origin out of ${stats?.monthlyShipments?.dispatched ?? 0} dispatched`}
-                  onClick={canManage ? () => navigate('/shiprocket-returns') : undefined}
+                  onClick={canManage ? () => navigate('/shipmaxx/ndr') : undefined}
                 />
                 <OpsKpiCard
                   label="Active In Transit"
@@ -1401,7 +1401,7 @@ export default function Dashboard() {
                   unit="IN TRANSIT"
                   icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
                   progressLabel={`${stats?.monthlyShipments?.inTransitCount ?? 0} in transit · ${stats?.monthlyShipments?.ofdCount ?? 0} out for delivery (ShipMaxx)`}
-                  onClick={canManage ? () => navigate('/shiprocket/orders') : undefined}
+                  onClick={canManage ? () => navigate('/shipmaxx') : undefined}
                 />
               </div>
             </SectionCard>

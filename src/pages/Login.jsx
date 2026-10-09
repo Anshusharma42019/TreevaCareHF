@@ -32,7 +32,7 @@ const FEATURES = [
       </svg>
     ), 
     title: 'Medicine Logistics', 
-    sub: 'Shiprocket & ShipMaxx' 
+    sub: 'ShipMaxx Logistics' 
   },
 ];
 
@@ -191,7 +191,7 @@ export default function Login() {
                 <rect x="1" y="3" width="15" height="13" rx="1" />
                 <path d="M16 8h4l3 5v3h-7V8z" />
               </svg>
-              <span>Shiprocket & ShipMaxx</span>
+              <span>ShipMaxx Logistics</span>
             </div>
           </div>
         </div>

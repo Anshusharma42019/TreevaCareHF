@@ -326,7 +326,7 @@ export default function Pipeline() {
     const oid = String(orderId);
     setDoneLoading(oid);
     try {
-      const res = await API.post(`/shiprocket/orders/${oid}/complete-followup`);
+      const res = await API.post(`/shipmaxx/orders/${oid}/complete-followup`);
       const { next_follow_up, completedCount } = res.data.data;
       setDeliveredOrders(prev => prev.map(o => {
         if (String(o._id) !== oid) return o;

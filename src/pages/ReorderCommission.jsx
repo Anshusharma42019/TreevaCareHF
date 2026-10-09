@@ -510,7 +510,6 @@ export default function ReorderCommission() {
                 setLoading(true);
                 try {
                   await api.post('/shipmaxx/orders/sync');
-                  await api.post('/shiprocket/orders/sync');
                   loadCommissions(1);
                   loadStaff();
                 } catch (e) { alert(e?.response?.data?.message || 'Sync failed'); }

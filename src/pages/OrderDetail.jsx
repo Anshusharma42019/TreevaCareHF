@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import * as srSvc from '../services/shiprocket.service';
 import * as smxSvc from '../services/shipmaxx.service';
 
 const STATUS_COLORS = {
@@ -77,14 +76,13 @@ export default function OrderDetail() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    srSvc.getLocalOrderLookup(id.match(/^[0-9a-f]{24}$/i) ? { _id: id } : { order_id: id })
+    smxSvc.getLocalOrderLookup(id.match(/^[0-9a-f]{24}$/i) ? { _id: id } : { order_id: id })
       .then(res => {
         const o = res.data?.data;
         setOrder(o);
         if (o?.awb_code) {
           setTrackLoading(true);
-          const trackApi = o.platform === 'shipmaxx' ? smxSvc.trackShipment : srSvc.trackByAWB;
-          trackApi(o.awb_code)
+          smxSvc.trackShipment(o.awb_code)
             .then(r => setTracking(r.data?.data))
             .catch(() => {})
             .finally(() => setTrackLoading(false));
@@ -98,8 +96,7 @@ export default function OrderDetail() {
     if (!order?.awb_code) return;
     setTrackLoading(true);
     try {
-      const trackApi = order.platform === 'shipmaxx' ? smxSvc.trackShipment : srSvc.trackByAWB;
-      const res = await trackApi(order.awb_code);
+      const res = await smxSvc.trackShipment(order.awb_code);
       setTracking(res.data?.data);
     } catch { setTracking(null); }
     finally { setTrackLoading(false); }
@@ -134,7 +131,7 @@ export default function OrderDetail() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold text-gray-900 truncate">Order {order.order_id || order.shiprocket_order_id}</h1>
+          <h1 className="text-lg font-bold text-gray-900 truncate">Order {order.order_id}</h1>
           <p className="text-xs text-gray-400 mt-0.5">Created {fmt(order.createdAt)}</p>
         </div>
         <span className={`text-xs font-bold px-3 py-1.5 rounded-full border ${statusColor}`}>
@@ -180,13 +177,7 @@ export default function OrderDetail() {
         <Field label="Order ID" value={order.order_id} mono />
         <Field label="Department" value={order.department || order.lead_id?.department || '—'} />
         <Field label="Problem" value={order.problem || order.lead_id?.problem || '—'} />
-        {order.platform !== 'shipmaxx' && (
-          <>
-            <Field label="Shiprocket ID" value={order.shiprocket_order_id} mono />
-            <Field label="Shipment ID" value={order.shiprocket_shipment_id} mono />
-          </>
-        )}
-        <Field label="AWB Code" value={order.awb_code} mono link href={order.platform === 'shipmaxx' ? undefined : `https://shiprocket.co/tracking/${order.awb_code}`} />
+        <Field label="AWB Code" value={order.awb_code} mono />
         <Field label="Courier" value={order.courier_name} />
         <Field label="Amount" value={order.sub_total ? `₹${Number(order.sub_total).toLocaleString()}` : null} />
         <Field label="Order Date" value={fmt(order.order_date || order.createdAt)} />
