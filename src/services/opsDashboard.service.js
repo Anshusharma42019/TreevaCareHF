@@ -15,6 +15,8 @@ const buildParams = (filters = {}) => {
   if (filters.platform) p.platform = filters.platform;
   if (filters.page) p.page = filters.page;
   if (filters.limit) p.limit = filters.limit;
+  if (filters.scope) p.scope = filters.scope;
+  if (filters.department) p.department = filters.department;
   if (filters.rtoThreshold !== undefined) p.rtoThreshold = filters.rtoThreshold;
   if (filters.ndrThreshold !== undefined) p.ndrThreshold = filters.ndrThreshold;
   return p;

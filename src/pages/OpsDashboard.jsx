@@ -978,7 +978,7 @@ const PRESETS = [
   { label: 'Custom', value: 'custom' },
 ];
 
-function FilterBar({ filters, onChange, lastUpdated, onRefresh, autoRefresh, onToggleAutoRefresh, kpis, onOpenBulkInvoice }) {
+function FilterBar({ filters, onChange, lastUpdated, onRefresh, autoRefresh, onToggleAutoRefresh, kpis, onOpenBulkInvoice, isAdminOrManager }) {
   // Local state for text inputs — prevents API call on every keystroke.
   // Commits to parent filter only on blur or Enter.
   const [stateInput, setStateInput] = useState(filters.state || '');
@@ -992,26 +992,61 @@ function FilterBar({ filters, onChange, lastUpdated, onRefresh, autoRefresh, onT
 
   return (
     <div className="bg-white/95 border-2 border-slate-300 rounded-2xl p-3.5 mb-4 shadow-md shadow-slate-900/5 backdrop-blur-xl flex flex-col gap-3">
-      {/* Row 1: Date Presets (Left) + Rate Badges & Bulk Invoices (Right) */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
-        {/* Date Presets */}
-        <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1 overflow-x-auto no-scrollbar">
-          {PRESETS.map(p => {
-            const isSel = filters.preset === p.value;
-            return (
+      {/* Row 1: Scope Switch + Date Presets (Left) + Rate Badges & Bulk Invoices (Right) */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-200/80 pb-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Scope: Admin/Manager can toggle All vs My. Regular staff only sees "My Orders & Shipments" */}
+          {isAdminOrManager ? (
+            <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1">
               <button
-                key={p.value}
-                onClick={() => onChange('preset', p.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
-                  isSel
+                type="button"
+                onClick={() => onChange('scope', 'all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                  (filters.scope === 'all' || !filters.scope)
                     ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
                     : 'text-slate-700 hover:bg-slate-200/70'
                 }`}
               >
-                {p.label}
+                All Overview
               </button>
-            );
-          })}
+              <button
+                type="button"
+                onClick={() => onChange('scope', 'my')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                  filters.scope === 'my'
+                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                    : 'text-slate-700 hover:bg-slate-200/70'
+                }`}
+              >
+                My Overview
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 font-black px-3 py-1.5 rounded-xl text-xs shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              My Orders & Shipments
+            </div>
+          )}
+
+          {/* Date Presets */}
+          <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1 overflow-x-auto no-scrollbar">
+            {PRESETS.map(p => {
+              const isSel = filters.preset === p.value;
+              return (
+                <button
+                  key={p.value}
+                  onClick={() => onChange('preset', p.value)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                    isSel
+                      ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                      : 'text-slate-700 hover:bg-slate-200/70'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Custom date range */}
@@ -1229,9 +1264,13 @@ const TABS = [
 /* ─── Main Component ─────────────────────────────────────────────────────── */
 export default function OpsDashboard() {
   const { user } = useAuth();
+  const isAdminOrManager = ['admin', 'manager'].includes(user?.role?.toLowerCase());
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [filters, setFilters] = useState({ preset: 'month' });
+  const [filters, setFilters] = useState(() => ({
+    preset: 'month',
+    scope: ['admin', 'manager'].includes(user?.role?.toLowerCase()) ? 'all' : 'my'
+  }));
   const [shipmentFilters, setShipmentFilters] = useState({ page: 1, limit: 50 });
   const [kpis, setKpis] = useState(null);
   const [trend, setTrend] = useState([]);
@@ -1394,7 +1433,6 @@ export default function OpsDashboard() {
   };
 
   // KPI cards config — role-based visibility
-  const isAdminOrManager = ['admin', 'manager'].includes(user?.role?.toLowerCase());
   const kpiCards = kpis ? [
     { key: 'verified',     label: 'Verified (Total)',   color: STATUS_COLORS.verified,      formatter: fmtNum, subtext: 'Total verified orders sent from Verification to Ready to Ship' },
     { key: 'totalShipments', label: 'Total Shipments',  color: STATUS_COLORS.totalShipments,formatter: fmtNum, subtext: 'Orders created this period — all other cards are subsets of this number' },
@@ -1448,7 +1486,8 @@ export default function OpsDashboard() {
         <div className="no-print">
           <FilterBar filters={filters} onChange={handleFilterChange} lastUpdated={lastUpdated}
             onRefresh={handleRefresh} autoRefresh={autoRefresh} onToggleAutoRefresh={() => setAutoRefresh(v => !v)}
-            kpis={kpis} onOpenBulkInvoice={() => setBulkInvoiceModalOpen(true)} />
+            kpis={kpis} onOpenBulkInvoice={() => setBulkInvoiceModalOpen(true)}
+            isAdminOrManager={isAdminOrManager} />
         </div>
 
         {/* Tabs */}
