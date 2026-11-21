@@ -62,7 +62,7 @@ export const syncShipmaxx  = ()          => api.post(`${BASE}/orders/sync`, {}, 
 export const importByIds   = (order_ids) => api.post(`${BASE}/orders/import-by-ids`, { order_ids });
 
 // ── Order Notes ───────────────────────────────────────────────────────────────
-export const saveOrderNote = (id, text, type = 'general', section = '') => api.post(`${BASE}/orders/${id}/notes`, { text, type, section });
+export const saveOrderNote = (id, text, type = 'general', section = '', creatorName = '', creatorRole = '') => api.post(`${BASE}/orders/${id}/notes`, { text, type, section, creatorName, creatorRole });
 export const getOrderActivity = (id) => api.get(`${BASE}/orders/${id}/activity`);
 export const updateOrderContact = (id, body) => api.patch(`${BASE}/orders/${id}/contact`, body);
 

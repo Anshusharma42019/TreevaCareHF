@@ -369,6 +369,7 @@ function AgingTable({ rows = [], title, color, emptyMsg, onVerifyClick, showVeri
                 <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
               {(showVerify || showInterakt) && <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>Action</th>}
+              <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>Delivery Boy / Reason</th>
             </tr>
           </thead>
           <tbody>
@@ -429,6 +430,24 @@ function AgingTable({ rows = [], title, color, emptyMsg, onVerifyClick, showVeri
                       )}
                     </td>
                   )}
+                  <td style={{ padding: '10px 10px', fontSize: 11, maxWidth: 220, ...textStyle }}>
+                    {(r.rto_reason || r.ndr_reason || r.courier_remarks) ? (
+                      <span 
+                        title={r.rto_reason || r.ndr_reason || r.courier_remarks}
+                        style={{
+                          display: 'inline-flex', alignItems: 'flex-start', gap: 4,
+                          padding: '3px 8px', background: '#fef2f2', color: '#b91c1c',
+                          border: '1px solid #fecaca', borderRadius: 6, fontWeight: 600,
+                          lineHeight: '1.3', wordBreak: 'break-word', whiteSpace: 'normal', textAlign: 'left'
+                        }}
+                      >
+                        <IconAlert size={12} style={{ flexShrink: 0, marginTop: 2, color: '#dc2626' }} />
+                        <span>{r.rto_reason || r.ndr_reason || r.courier_remarks}</span>
+                      </span>
+                    ) : (
+                      <span style={{ color: '#cbd5e1' }}>—</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -824,6 +843,7 @@ function ShipmentsTable({ data, filters, onFilterChange, onExportCsv, onVerifyCl
                 <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
               {showActionColumn && <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>Action</th>}
+              <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>Delivery Boy / RTO Reason</th>
             </tr>
           </thead>
           <tbody>
@@ -847,6 +867,23 @@ function ShipmentsTable({ data, filters, onFilterChange, onExportCsv, onVerifyCl
                 </td>
                 <td style={{ padding: '10px 10px', color: '#374151', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...textStyle }}>
                   <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.billing_customer_name || '—'}</div>
+                  {(() => {
+                    const rtoC = [...(s.comments || [])].reverse().find(c => {
+                      const sec = String(c.section || '').toLowerCase().trim();
+                      return sec === 'rto_verification' || sec === 'rto verification' || sec === 'rto';
+                    });
+                    if (!rtoC) return null;
+                    const byUser = rtoC.creatorName || rtoC.createdBy?.name || '';
+                    return (
+                      <div title={`RTO Note: ${rtoC.text}${byUser ? ` (By: ${byUser})` : ''}`} style={{ 
+                        display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '3px', 
+                        padding: '2px 6px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', 
+                        borderRadius: '5px', fontSize: '10px', fontWeight: 600, maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                      }}>
+                        <span>💬 {rtoC.text}</span>
+                      </div>
+                    );
+                  })()}
                   {s.interakt_reply_text && (
                     <div title={`Reply received: ${s.interakt_reply_text}`} style={{ 
                       display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px', 
@@ -919,9 +956,36 @@ function ShipmentsTable({ data, filters, onFilterChange, onExportCsv, onVerifyCl
                     )}
                   </td>
                 )}
+                <td style={{ padding: '10px 10px', fontSize: 11, maxWidth: 220, ...textStyle }}>
+                  {(s.rto_reason || s.ndr_reason || s.courier_remarks) ? (
+                    <span 
+                      title={s.rto_reason || s.ndr_reason || s.courier_remarks}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'flex-start',
+                        gap: 5,
+                        padding: '4px 8px',
+                        background: '#fef2f2',
+                        color: '#b91c1c',
+                        border: '1px solid #fecaca',
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        lineHeight: '1.3',
+                        wordBreak: 'break-word',
+                        whiteSpace: 'normal',
+                        textAlign: 'left'
+                      }}
+                    >
+                      <IconAlert size={12} style={{ flexShrink: 0, marginTop: 2, color: '#dc2626' }} />
+                      <span>{s.rto_reason || s.ndr_reason || s.courier_remarks}</span>
+                    </span>
+                  ) : (
+                    <span style={{ color: '#cbd5e1' }}>—</span>
+                  )}
+                </td>
               </tr>
             )})}
-            {!shipments.length && <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No shipments found</td></tr>}
+            {!shipments.length && <tr><td colSpan={13} style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No shipments found</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1320,6 +1384,21 @@ export default function OpsDashboard() {
     }
   };
 
+  const handleCommentAdded = (orderId, newComments) => {
+    if (shipments?.shipments) {
+      setShipments(prev => ({
+        ...prev,
+        shipments: prev.shipments.map(s => (s.order_id === orderId || s._id === orderId) ? { ...s, comments: newComments } : s)
+      }));
+    }
+    if (aging) {
+      setAging(prev => ({
+        ...prev,
+        rto_intersite_stuck: prev.rto_intersite_stuck.map(s => (s.order_id === orderId || s._id === orderId) ? { ...s, comments: newComments } : s)
+      }));
+    }
+  };
+
   const loadOverview = useCallback(async (f) => {
     setLoad('kpis', true); setLoad('trend', true); setLoad('funnel', true); setLoad('alerts', true);
     try {
@@ -1415,7 +1494,7 @@ export default function OpsDashboard() {
   const handleExportCsv = () => {
     const rows = shipments?.shipments || [];
     if (!rows.length) return;
-    const headers = ['AWB', 'Customer', 'City', 'State', 'Courier', 'Status', 'Platform', 'Order Date', 'Attempts', 'Amount'];
+    const headers = ['AWB', 'Customer', 'City', 'State', 'Courier', 'Status', 'Platform', 'Order Date', 'Attempts', 'Amount', 'Delivery / RTO Reason'];
     const csv = [
       headers.join(','),
       ...rows.map(r => [
@@ -1423,6 +1502,7 @@ export default function OpsDashboard() {
         r.courier_name, r.status, r.platform,
         r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-IN') : '',
         r.delivery_attempt, r.sub_total,
+        r.rto_reason || r.ndr_reason || r.courier_remarks || ''
       ].map(v => `"${String(v || '').replace(/"/g, '""')}"`).join(','))
     ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -1640,6 +1720,7 @@ export default function OpsDashboard() {
         onClose={() => { setVerificationModalOpen(false); setVerificationShipment(null); }}
         shipment={verificationShipment}
         onSuccess={handleVerifySuccess}
+        onCommentAdded={handleCommentAdded}
       />
       <OpsInteraktModal
         isOpen={interaktModalOpen}
