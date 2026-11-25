@@ -1,6 +1,24 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Printer, Edit3, Eye, Plus, Trash2 } from 'lucide-react';
+import {
+  X,
+  Printer,
+  Edit3,
+  Eye,
+  Plus,
+  Trash2,
+  Pill,
+  Droplet,
+  Package,
+  User,
+  Lock,
+  Save,
+  Sparkles,
+  ClipboardList,
+  Check,
+  AlertTriangle,
+  FileText,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import API from '../api';
 
@@ -253,22 +271,296 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
   const [selectedPotencies, setSelectedPotencies] = useState({}); // { [id]: { selected: boolean, selectedDosages: { [dose]: boolean } } }
   const [selectedExtras, setSelectedExtras] = useState({});
 
+  // Multi-Kit / Course Progression State
+  const [allKits, setAllKits] = useState([]);
+  const [selectedKitNumber, setSelectedKitNumber] = useState(1);
+  const [selectedKitName, setSelectedKitName] = useState('Kit 1');
+  const [currentPrescriptionId, setCurrentPrescriptionId] = useState(null);
+  const [currentPrescriptionCreatedAt, setCurrentPrescriptionCreatedAt] = useState(null);
+
   // Custom Prescribed Medicines State
   const [showQuickAdder, setShowQuickAdder] = useState(false);
   const [prescribedMedicines, setPrescribedMedicines] = useState([]);
   const [editingMedId, setEditingMedId] = useState(null);
   const [newMed, setNewMed] = useState({
     name: '',
-    dosage: '15 Drops',
+    qty: 1,
+    dosage: '0 Drops',
     frequency: 'BD',
     timing: 'After Food',
     duration: '1 Month',
   });
+  const [doseUnit, setDoseUnit] = useState('Drops');
+  const [doseCount, setDoseCount] = useState('0');
+
+  const parseDosage = (dosageStr = '') => {
+    const str = String(dosageStr).trim();
+    if (!str) return { unit: 'Drops', count: '0', custom: '' };
+    if (str.includes('आंख') || str.includes('Eye Drops') || str.includes('Eye')) {
+      return { unit: 'EyeDrops', count: str, custom: '' };
+    }
+    if (str.includes('कान') || str.includes('Ear Drops') || str.includes('Ear')) {
+      return { unit: 'EarDrops', count: str, custom: '' };
+    }
+    if (str.includes('नाक') || str.includes('नस्य') || str.includes('Nasal')) {
+      return { unit: 'NasalDrops', count: str, custom: '' };
+    }
+    if (str.includes('Drops') || str.includes('बूँद') || str.includes('बूँदें') || str.includes('बूंद')) {
+      const num = str.match(/\d+/)?.[0] || '0';
+      return { unit: 'Drops', count: num, custom: '' };
+    }
+    if (str.includes('Globules') || str.includes('दाने') || str.includes('मीठी गोली')) {
+      const num = str.match(/\d+/)?.[0] || '4';
+      return { unit: 'Globules', count: num, custom: '' };
+    }
+    if (str.includes('वटी') || str.includes('Vati') || str.includes('Gutika') || str.includes('गुटिका')) {
+      const num = str.match(/\d+/)?.[0] || '2';
+      return { unit: 'Vati', count: num, custom: '' };
+    }
+    if (str.includes('Tab') || str.includes('गोली') || str.includes('टेबलेट')) {
+      const num = str.match(/\d+/)?.[0] || '1';
+      return { unit: 'Tab', count: num, custom: '' };
+    }
+    if (str.includes('Cap') || str.includes('कैप्सूल') || str.includes('Softgel')) {
+      const num = str.match(/\d+/)?.[0] || '1';
+      return { unit: 'Cap', count: num, custom: '' };
+    }
+    if (str.includes('Effervescent') || str.includes('घुलने वाली')) {
+      return { unit: 'Effervescent', count: str, custom: '' };
+    }
+    if (str.includes('काढ़ा') || str.includes('Kadha') || str.includes('Kwath') || str.includes('क्वाथ')) {
+      return { unit: 'Kadha', count: str, custom: '' };
+    }
+    if (str.includes('आसव') || str.includes('अरिष्ट') || str.includes('Asava') || str.includes('Arishta')) {
+      return { unit: 'Asava', count: str, custom: '' };
+    }
+    if (str.includes('अर्क') || str.includes('Ark')) {
+      return { unit: 'Ark', count: str, custom: '' };
+    }
+    if (str.includes('भस्म') || str.includes('Bhasma') || str.includes('पिष्टी') || str.includes('Pishti')) {
+      return { unit: 'Bhasma', count: str, custom: '' };
+    }
+    if (str.includes('ग्रेन्यूल्स') || str.includes('Granules')) {
+      return { unit: 'Granules', count: str, custom: '' };
+    }
+    if (str.includes('पुड़िया') || str.includes('Sachet') || str.includes('सैशे')) {
+      return { unit: 'Sachet', count: str, custom: '' };
+    }
+    if (str.includes('चूर्ण') || str.includes('Churna') || str.includes('Powder')) {
+      return { unit: 'Powder', count: str, custom: '' };
+    }
+    if (str.includes('प्राश') || str.includes('Prash') || str.includes('Avaleha') || str.includes('अवलेह')) {
+      return { unit: 'Avaleha', count: str, custom: '' };
+    }
+    if (str.includes('घृत') || str.includes('Ghritha') || str.includes('Ghee')) {
+      return { unit: 'Ghritha', count: str, custom: '' };
+    }
+    if (str.includes('माजून') || str.includes('Majun') || str.includes('खमीरा') || str.includes('Khamira')) {
+      return { unit: 'Majun', count: str, custom: '' };
+    }
+    if (str.includes('तेल') || str.includes('Taila') || str.includes('Oil') || str.includes('तैलम')) {
+      return { unit: 'Oil', count: str, custom: '' };
+    }
+    if (str.includes('मलहम') || str.includes('Ointment') || str.includes('Cream') || str.includes('Gel') || str.includes('क्रीम') || str.includes('जेल')) {
+      return { unit: 'Ointment', count: str, custom: '' };
+    }
+    if (str.includes('लेप') || str.includes('Lepa') || str.includes('लेपन')) {
+      return { unit: 'Lepa', count: str, custom: '' };
+    }
+    if (str.includes('साबुन') || str.includes('Soap') || str.includes('शैम्पू') || str.includes('Shampoo') || str.includes('Wash')) {
+      return { unit: 'Wash', count: str, custom: '' };
+    }
+    if (str.includes('पैच') || str.includes('Patch') || str.includes('प्लास्टर')) {
+      return { unit: 'Patch', count: str, custom: '' };
+    }
+    if (str.includes('कुल्ला') || str.includes('Gargle') || str.includes('Mouthwash') || str.includes('गरारे')) {
+      return { unit: 'Gargle', count: str, custom: '' };
+    }
+    if (str.includes('Puff') || str.includes('Spray') || str.includes('स्प्रे') || str.includes('इनहेलर')) {
+      const num = str.match(/\d+/)?.[0] || '1';
+      return { unit: 'Puff', count: num, custom: '' };
+    }
+    if (str.includes('Spoon') || str.includes('चम्मच') || str.includes('Syrup') || str.includes('सिरप')) {
+      if (str.toLowerCase().includes('half') || str.includes('आधा')) {
+        return { unit: 'Syrup', count: 'Half', custom: '' };
+      }
+      const num = str.match(/\d+/)?.[0] || '1';
+      return { unit: 'Syrup', count: num, custom: '' };
+    }
+    return { unit: 'custom', count: '', custom: str };
+  };
+
+  const handleDoseUnitChange = (unit) => {
+    setDoseUnit(unit);
+    let defaultCount = '0';
+    let formattedDose = '0 Drops';
+
+    if (unit === 'Drops') {
+      defaultCount = '0';
+      formattedDose = '0 Drops';
+    } else if (unit === 'Syrup') {
+      defaultCount = '1';
+      formattedDose = '1 Spoon (5ml)';
+    } else if (unit === 'Kadha') {
+      defaultCount = '20ml';
+      formattedDose = '20ml काढ़ा (Kadha)';
+    } else if (unit === 'Asava') {
+      defaultCount = '15ml (बराबर पानी मिलाकर)';
+      formattedDose = '15ml आसव/अरिष्ट (बराबर पानी मिलाकर)';
+    } else if (unit === 'Ark') {
+      defaultCount = '10ml';
+      formattedDose = '10ml अर्क (Ark)';
+    } else if (unit === 'Tab') {
+      defaultCount = '1';
+      formattedDose = '1 Tab';
+    } else if (unit === 'Vati') {
+      defaultCount = '2';
+      formattedDose = '2 वटी (Gutika)';
+    } else if (unit === 'Cap') {
+      defaultCount = '1';
+      formattedDose = '1 Cap';
+    } else if (unit === 'Globules') {
+      defaultCount = '4';
+      formattedDose = '4 दाने (मीठी गोली)';
+    } else if (unit === 'Effervescent') {
+      defaultCount = '1 गोली (1 गिलास पानी में)';
+      formattedDose = '1 गोली (1 गिलास पानी में घोलकर)';
+    } else if (unit === 'Powder') {
+      defaultCount = '1 चम्मच';
+      formattedDose = '1 चम्मच चूर्ण (5gm)';
+    } else if (unit === 'Sachet') {
+      defaultCount = '1 पुड़िया';
+      formattedDose = '1 पुड़िया (Sachet)';
+    } else if (unit === 'Bhasma') {
+      defaultCount = '125mg (1 रत्ती / शहद से)';
+      formattedDose = '125mg भस्म (1 रत्ती / शहद से)';
+    } else if (unit === 'Granules') {
+      defaultCount = '1 चम्मच';
+      formattedDose = '1 चम्मच ग्रेन्यूल्स (दूध के साथ)';
+    } else if (unit === 'Avaleha') {
+      defaultCount = '1 चम्मच';
+      formattedDose = '1 चम्मच प्राश (10gm)';
+    } else if (unit === 'Ghritha') {
+      defaultCount = '1 चम्मच (दूध के साथ)';
+      formattedDose = '1 चम्मच औषधीय घृत (गुनगुने दूध से)';
+    } else if (unit === 'Majun') {
+      defaultCount = '5gm';
+      formattedDose = '5gm माजून / खमीरा';
+    } else if (unit === 'Oil') {
+      defaultCount = 'दिन में 2 बार हल्के हाथ से मालिश';
+      formattedDose = 'दिन में 2 बार हल्के हाथ से मालिश';
+    } else if (unit === 'Ointment') {
+      defaultCount = 'प्रभावित जगह पर दिन में 2 बार लगाएं';
+      formattedDose = 'प्रभावित जगह पर दिन में 2 बार लगाएं';
+    } else if (unit === 'Lepa') {
+      defaultCount = 'हर्बल लेप बनाकर लगाएं';
+      formattedDose = 'हर्बल लेप बनाकर प्रभावित जगह पर लगाएं';
+    } else if (unit === 'Wash') {
+      defaultCount = 'नहाते समय प्रयोग करें';
+      formattedDose = 'नहाते समय मेडिकेटेड साबुन/वॉश का प्रयोग करें';
+    } else if (unit === 'Patch') {
+      defaultCount = '1 पैच (24 घंटे तक)';
+      formattedDose = '1 पैच (24 घंटे तक दर्द वाले स्थान पर)';
+    } else if (unit === 'EyeDrops') {
+      defaultCount = '1-1 बूँद दोनों आंखों में';
+      formattedDose = '1-1 बूँद दोनों आंखों में';
+    } else if (unit === 'EarDrops') {
+      defaultCount = '2-2 बूँद कान में';
+      formattedDose = '2-2 बूँद कान में (गुनगुना करके)';
+    } else if (unit === 'NasalDrops') {
+      defaultCount = '2-2 बूँद दोनों नथुनों में';
+      formattedDose = '2-2 बूँद दोनों नथुनों में (नस्य)';
+    } else if (unit === 'Puff') {
+      defaultCount = '1';
+      formattedDose = '1 Puff / Spray';
+    } else if (unit === 'Gargle') {
+      defaultCount = '10ml गुनगुने पानी में';
+      formattedDose = '10ml गुनगुने पानी में डालकर गरारे करें';
+    } else if (unit === 'custom') {
+      defaultCount = '';
+      formattedDose = '';
+    }
+
+    setDoseCount(defaultCount);
+    setNewMed((prev) => ({ ...prev, dosage: formattedDose }));
+  };
+
+  const handleDoseCountChange = (count) => {
+    setDoseCount(count);
+    let formattedDose = '';
+    if (doseUnit === 'Drops') {
+      formattedDose = `${count} Drops`;
+    } else if (doseUnit === 'Syrup') {
+      if (String(count).toLowerCase() === 'half') {
+        formattedDose = 'Half Spoon (2.5ml)';
+      } else {
+        const ml = (Number(count) || 1) * 5;
+        formattedDose = `${count} Spoon (${ml}ml)`;
+      }
+    } else if (doseUnit === 'Kadha') {
+      formattedDose = `${count} काढ़ा (Kadha)`;
+    } else if (doseUnit === 'Asava') {
+      formattedDose = `${count} आसव/अरिष्ट`;
+    } else if (doseUnit === 'Ark') {
+      formattedDose = `${count} अर्क (Ark)`;
+    } else if (doseUnit === 'Tab') {
+      formattedDose = `${count} Tab`;
+    } else if (doseUnit === 'Vati') {
+      formattedDose = `${count} वटी (Gutika)`;
+    } else if (doseUnit === 'Cap') {
+      formattedDose = `${count} Cap`;
+    } else if (doseUnit === 'Globules') {
+      formattedDose = `${count} दाने (मीठी गोली)`;
+    } else if (doseUnit === 'Effervescent') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'Powder') {
+      formattedDose = `${count} चूर्ण`;
+    } else if (doseUnit === 'Sachet') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'Bhasma') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'Granules') {
+      formattedDose = `${count} ग्रेन्यूल्स`;
+    } else if (doseUnit === 'Avaleha') {
+      formattedDose = `${count} प्राश (Avaleha)`;
+    } else if (doseUnit === 'Ghritha') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'Majun') {
+      formattedDose = `${count} माजून`;
+    } else if (doseUnit === 'Oil') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'Ointment') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'Lepa') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'Wash') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'Patch') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'EyeDrops') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'EarDrops') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'NasalDrops') {
+      formattedDose = String(count);
+    } else if (doseUnit === 'Puff') {
+      formattedDose = `${count} Puff / Spray`;
+    } else if (doseUnit === 'Gargle') {
+      formattedDose = String(count);
+    } else {
+      formattedDose = String(count);
+    }
+    setNewMed((prev) => ({ ...prev, dosage: formattedDose }));
+  };
 
   const startEditMedicine = (med) => {
     setEditingMedId(med.id);
+    const parsed = parseDosage(med.dosage);
+    setDoseUnit(parsed.unit);
+    setDoseCount(parsed.count);
     setNewMed({
       name: med.name || '',
+      qty: Number(med.qty) || 1,
       dosage: med.dosage || '15 Drops',
       frequency: med.frequency || 'BD',
       timing: med.timing || 'After Food',
@@ -281,9 +573,12 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
 
   const cancelEditMedicine = () => {
     setEditingMedId(null);
+    setDoseUnit('Drops');
+    setDoseCount('0');
     setNewMed({
       name: '',
-      dosage: '15 Drops',
+      qty: 1,
+      dosage: '0 Drops',
       frequency: 'BD',
       timing: 'After Food',
       duration: '1 Month',
@@ -293,6 +588,8 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
   const addPrescribedMedicine = () => {
     if (!newMed.name.trim()) return;
 
+    const medQty = Number(newMed.qty) || 1;
+
     if (editingMedId) {
       setPrescribedMedicines((prev) =>
         prev.map((m) =>
@@ -300,7 +597,8 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
             ? {
                 ...m,
                 name: newMed.name.trim(),
-                dosage: newMed.dosage || '15 Drops',
+                qty: medQty,
+                dosage: newMed.dosage || '0 Drops',
                 frequency: newMed.frequency || 'BD',
                 timing: newMed.timing || 'After Food',
                 duration: newMed.duration || '1 Month',
@@ -315,7 +613,8 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
         {
           id: Date.now(),
           name: newMed.name.trim(),
-          dosage: newMed.dosage || '15 Drops',
+          qty: medQty,
+          dosage: newMed.dosage || '0 Drops',
           frequency: newMed.frequency || 'BD',
           timing: newMed.timing || 'After Food',
           duration: newMed.duration || '1 Month',
@@ -323,21 +622,38 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
       ]);
     }
 
+    setDoseUnit('Drops');
+    setDoseCount('0');
     setNewMed({
       name: '',
-      dosage: '15 Drops',
+      qty: 1,
+      dosage: '0 Drops',
       frequency: 'BD',
       timing: 'After Food',
       duration: '1 Month',
     });
   };
 
-  const quickAddMedicine = (medName, customDose = '15 Drops', customFreq = 'BD', customTiming = 'After Food', customDur = '1 Month') => {
+  const updateMedicineQty = (id, delta) => {
+    setPrescribedMedicines((prev) =>
+      prev.map((m) => {
+        if (m.id === id) {
+          const currentQty = Number(m.qty) || 1;
+          const nextQty = Math.max(1, currentQty + delta);
+          return { ...m, qty: nextQty };
+        }
+        return m;
+      })
+    );
+  };
+
+  const quickAddMedicine = (medName, customQty = 1, customDose = '15 Drops', customFreq = 'BD', customTiming = 'After Food', customDur = '1 Month') => {
     setPrescribedMedicines((prev) => [
       ...prev,
       {
         id: Date.now() + Math.random(),
         name: medName,
+        qty: Number(customQty) || 1,
         dosage: customDose,
         frequency: customFreq,
         timing: customTiming,
@@ -374,6 +690,83 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
       }
     });
     setSelectedPotencies(initialPot);
+  };
+
+  // Switch to a specific kit (Kit 1, Kit 2, Kit 3...)
+  const switchKit = (kitNum) => {
+    const kNum = Number(kitNum) || 1;
+    setSelectedKitNumber(kNum);
+    setSelectedKitName(`Kit ${kNum}`);
+
+    const existingKit = (allKits || []).find((k, idx) => (Number(k.kitNumber) || (idx === 0 ? 1 : idx + 1)) === kNum);
+    if (existingKit) {
+      setCurrentPrescriptionId(existingKit._id || null);
+      setCurrentPrescriptionCreatedAt(existingKit.createdAt || null);
+      setPrescribedMedicines(Array.isArray(existingKit.prescribedMedicines) ? existingKit.prescribedMedicines : []);
+      if (Array.isArray(existingKit.complaints) && existingKit.complaints.length > 0) {
+        setComplaints(existingKit.complaints);
+      }
+      if (existingKit.department) {
+        applyDepartmentPreset(existingKit.department, true);
+      }
+      if (existingKit.doctorName) {
+        setClinic((prev) => ({
+          ...prev,
+          doctorName: existingKit.doctorName,
+          doctorDegree: existingKit.doctorDegree || prev.doctorDegree,
+        }));
+      }
+      setPatientInfo((prev) => ({
+        ...prev,
+        age: (existingKit.age !== undefined && existingKit.age !== null) ? String(existingKit.age) : prev.age,
+        weight: (existingKit.weight !== undefined && existingKit.weight !== null) ? String(existingKit.weight) : prev.weight,
+        gender: existingKit.gender || prev.gender,
+        marriedStatus: existingKit.maritalStatus || prev.marriedStatus,
+        profession: existingKit.occupation || prev.profession,
+        since: existingKit.problemDuration || prev.since,
+        treatingFor: existingKit.problem || prev.treatingFor,
+      }));
+      setSaveMsg(`Switched to Kit ${kNum}`);
+      setTimeout(() => setSaveMsg(''), 2500);
+    } else {
+      // New kit drafting mode (not yet in database)
+      setCurrentPrescriptionId(null);
+      setCurrentPrescriptionCreatedAt(new Date().toISOString());
+      setPrescribedMedicines([]);
+      setSaveMsg(`Drafting new prescription for Kit ${kNum}`);
+      setTimeout(() => setSaveMsg(''), 3000);
+    }
+  };
+
+  // Create next kit prescription (Always 100% FRESH & EMPTY)
+  const createNewKit = () => {
+    const existingKitNumbers = allKits.map((k, idx) => Number(k.kitNumber) || (idx === 0 ? 1 : idx + 1));
+    const nextKitNum = existingKitNumbers.length > 0 ? Math.max(...existingKitNumbers) + 1 : 2;
+
+    setSelectedKitNumber(nextKitNum);
+    setSelectedKitName(`Kit ${nextKitNum}`);
+    setCurrentPrescriptionId(null);
+    setCurrentPrescriptionCreatedAt(new Date().toISOString());
+
+    // Clear medicines for fresh prescription entry
+    setPrescribedMedicines([]);
+    setEditingMedId(null);
+    setNewMed({
+      name: '',
+      dosage: '15 Drops',
+      frequency: 'BD',
+      timing: 'After Food',
+      duration: '1 Month',
+    });
+
+    setActiveTab('edit');
+    setSaveMsg(`⭐ Kit ${nextKitNum} started fresh! Enter medicines and click Save.`);
+    setTimeout(() => {
+      setSaveMsg('');
+      if (medicineInputRef.current) {
+        medicineInputRef.current.focus();
+      }
+    }, 100);
   };
 
   // Pre-fill patient data & department detection on load
@@ -698,6 +1091,10 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
       const leadId = patientData.lead?._id || patientData.lead || patientData.lead_id?._id || patientData.lead_id;
       const taskId = patientData.task?._id || patientData.task;
 
+      const initKit = Number(patientData.kit_number || patientData.kitNumber || patientData.raw?.kit_number || 1);
+      setSelectedKitNumber(initKit);
+      setSelectedKitName(`Kit ${initKit}`);
+
       if (targetId || leadId || taskId || cleanMobile) {
         API.get('/prescriptions/get-by-target', {
           params: {
@@ -705,13 +1102,25 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
             leadId: leadId ? String(leadId) : undefined,
             taskId: taskId ? String(taskId) : undefined,
             phone: cleanMobile || undefined,
+            kitNumber: initKit || undefined,
           },
         })
           .then((res) => {
             const pData = res.data?.data;
+            const fetchedKits = Array.isArray(res.data?.allKits) ? res.data.allKits : (pData ? [pData] : []);
+            setAllKits(fetchedKits);
+
             if (pData) {
+              setCurrentPrescriptionId(pData._id || null);
+              setCurrentPrescriptionCreatedAt(pData.createdAt || null);
+              setSelectedKitNumber(pData.kitNumber || initKit);
+              setSelectedKitName(pData.kitName || `Kit ${pData.kitNumber || initKit}`);
+
               if (Array.isArray(pData.prescribedMedicines) && pData.prescribedMedicines.length > 0) {
                 setPrescribedMedicines(pData.prescribedMedicines);
+              }
+              if (Array.isArray(pData.complaints) && pData.complaints.length > 0) {
+                setComplaints(pData.complaints);
               }
               const savedDoc = getAssignedDoctorName(pData) || (pData.doctorName && !pData.doctorName.toLowerCase().includes('admin') ? pData.doctorName : null);
               if (savedDoc) {
@@ -794,7 +1203,9 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
       <div className="prescription-portal-container" style={{ position: 'fixed', inset: 0, zIndex: 99999 }}>
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.75)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
           <div style={{ backgroundColor: '#fff', padding: '32px', borderRadius: '16px', maxWidth: '440px', width: '100%', textAlign: 'center' }}>
-            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔒</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+              <Lock size={44} style={{ color: '#64748b' }} />
+            </div>
             <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>No Department Access</h3>
             <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>
               Your account has no department permissions assigned. Please ask an Admin to grant you access in Staff Directory.
@@ -880,8 +1291,12 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
       const leadId = patientData.lead?._id || patientData.lead || patientData.lead_id?._id || patientData.lead_id;
       const taskId = patientData.task?._id || patientData.task;
 
-      // 1. Save to dedicated MongoDB Prescription collection
-      await API.post('/prescriptions/save', {
+      // 1. Save to dedicated MongoDB Prescription collection with multi-kit tracking
+      const saveRes = await API.post('/prescriptions/save', {
+        prescriptionDocId: currentPrescriptionId || undefined,
+        kitNumber: selectedKitNumber,
+        kitName: selectedKitName || `Kit ${selectedKitNumber}`,
+        orderId: patientData.order_id || patientData.orderId || (patientData.platform === 'shipmaxx' ? String(patientData._id) : undefined),
         targetId: targetId ? String(targetId) : undefined,
         leadId: leadId ? String(leadId) : undefined,
         taskId: taskId ? String(taskId) : undefined,
@@ -899,7 +1314,18 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
         department: selectedDeptKey,
         prescribedMedicines: prescribedMedicines,
         complaints: complaints,
-      }).catch((err) => console.error('Prescription save error:', err));
+      }).catch((err) => {
+        console.error('Prescription save error:', err);
+        return null;
+      });
+
+      if (saveRes?.data?.data?._id) {
+        setCurrentPrescriptionId(saveRes.data.data._id);
+        setCurrentPrescriptionCreatedAt(saveRes.data.data.createdAt || new Date().toISOString());
+      }
+      if (Array.isArray(saveRes?.data?.allKits)) {
+        setAllKits(saveRes.data.allKits);
+      }
 
       // 2. Sync to related entity models for backward compatibility
       if (leadId) await API.patch(`/leads/${leadId}`, updateData).catch(() => {});
@@ -916,10 +1342,10 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
         patientData.lead.prescribedMedicines = prescribedMedicines;
       }
 
-      setSaveMsg('✓ Details saved & synced to database!');
+      setSaveMsg(`Kit ${selectedKitNumber} details saved & synced to database!`);
       setTimeout(() => setSaveMsg(''), 3000);
     } catch (err) {
-      setSaveMsg('⚠ Saved locally for this session.');
+      setSaveMsg('Saved locally for this session.');
       setTimeout(() => setSaveMsg(''), 3000);
     } finally {
       setSavingDetails(false);
@@ -1019,9 +1445,9 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                   }}
                 >
-                  {allowedDeptKeys.includes('male') && <option value="male">♂️ Male Health</option>}
-                  {allowedDeptKeys.includes('skin') && <option value="skin">🌿 Skin Care</option>}
-                  {allowedDeptKeys.includes('ortho') && <option value="ortho">🦴 Ortho & Joint Care</option>}
+                  {allowedDeptKeys.includes('male') && <option value="male">Male Health</option>}
+                  {allowedDeptKeys.includes('skin') && <option value="skin">Skin Care</option>}
+                  {allowedDeptKeys.includes('ortho') && <option value="ortho">Ortho & Joint Care</option>}
                 </select>
               </div>
 
@@ -1120,6 +1546,137 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
             </div>
           </div>
 
+          {/* Multi-Kit Course Progression Bar (No Print) */}
+          <div
+            className="prescription-no-print"
+            style={{
+              backgroundColor: '#f8fafc',
+              borderBottom: '1.5px solid #e2e8f0',
+              padding: '8px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '12px', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Package size={14} style={{ color: '#0284c7' }} /> Patient Kits:
+              </span>
+
+              {/* Existing Kits Pills */}
+              {allKits.map((k, idx) => {
+                const kNum = Number(k.kitNumber) || (idx === 0 ? 1 : idx + 1);
+                const isSelected = Number(kNum) === Number(selectedKitNumber);
+                return (
+                  <button
+                    key={k._id || kNum}
+                    type="button"
+                    onClick={() => switchKit(kNum)}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: '8px',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      border: isSelected ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                      backgroundColor: isSelected ? '#0284c7' : '#ffffff',
+                      color: isSelected ? '#ffffff' : '#334155',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      boxShadow: isSelected ? '0 2px 4px rgba(2, 132, 199, 0.25)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title={`View / Print Kit ${kNum} Prescription`}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Pill size={12} /> Kit {kNum}
+                    </span>
+                    <span style={{ fontSize: '9px', opacity: 0.85, padding: '1px 5px', borderRadius: '4px', backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : '#f1f5f9' }}>
+                      {k.prescribedMedicines?.length || 0} meds
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* If drafting a new Kit that isn't saved yet */}
+              {!allKits.some((k, idx) => (Number(k.kitNumber) || (idx === 0 ? 1 : idx + 1)) === Number(selectedKitNumber)) && (
+                <button
+                  type="button"
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    border: '2px dashed #0284c7',
+                    backgroundColor: '#e0f2fe',
+                    color: '#0369a1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <Sparkles size={12} /> Kit {selectedKitNumber} (Drafting New)
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {/* Actions: + New Kit Course & Quick Kit Jump */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Jump to:</span>
+                <select
+                  value={selectedKitNumber}
+                  onChange={(e) => switchKit(Number(e.target.value))}
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                    <option key={num} value={num}>
+                      Kit {num} {allKits.some((k) => Number(k.kitNumber) === num) ? '(Saved)' : '(Create New)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => createNewKit()}
+                style={{
+                  backgroundColor: '#16a34a',
+                  color: '#ffffff',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  boxShadow: '0 2px 4px rgba(22, 163, 74, 0.25)',
+                }}
+                title="Create next fresh course prescription with empty medicine table"
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <Plus size={13} /> Add Kit {allKits.length > 0 ? Math.max(...allKits.map((k) => Number(k.kitNumber) || 1)) + 1 : 2}
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* Modal Body / Scroll Container */}
           <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f8fafc', padding: '16px' }}>
             {/* EDIT MODE TAB */}
@@ -1133,10 +1690,12 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                   boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                 }}
               >
-                {/* 👤 Patient Info & Vitals Section */}
+                {/* Patient Info & Vitals Section */}
                 <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
                   <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>👤 Patient Info & Vitals (Age, Gender, Marital Status, Weight, Profession, Duration)</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <User size={15} style={{ color: '#0284c7' }} /> Patient Info & Vitals (Age, Gender, Marital Status, Weight, Profession, Duration)
+                    </span>
                   </h4>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr 1fr 1.5fr 1.5fr 2fr', gap: '10px' }}>
                     <div>
@@ -1231,10 +1790,12 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                   </div>
                 </div>
 
-                {/* 💊 Prescribed Custom Medicines Section */}
+                {/* Prescribed Custom Medicines Section */}
                 <div>
                   <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>💊 Prescribed Medicines (Doctor Custom Rx)</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <Pill size={16} style={{ color: '#0284c7' }} /> Prescribed Medicines (Doctor Custom Rx)
+                    </span>
                     <button
                       type="button"
                       onClick={() => setActiveTab('preview')}
@@ -1261,10 +1822,10 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
 
                   {/* Add New Medicine Form */}
                   <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1.2fr 1.3fr 1.3fr 1fr auto', gap: '10px', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 2.4fr 1.2fr 1.2fr 1fr auto', gap: '10px', alignItems: 'flex-start' }}>
                       <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
-                          Medicine Name
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                          <FileText size={12} style={{ color: '#0284c7' }} /> Medicine Name
                         </label>
                         <input
                           ref={medicineInputRef}
@@ -1277,46 +1838,793 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                         />
                       </div>
 
-                      {/* Dose / Quantity Dropdown */}
+                      {/* Dose / Drops / Units Dropdown with Interactive "Kitne" (How Many) Selector */}
                       <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
-                          Dose / Quantity
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                          <Pill size={12} style={{ color: '#0284c7' }} /> Dose / खुराक (रूप व मात्रा)
                         </label>
                         <select
-                          value={['15 Drops', '10 Drops', '5 Drops', '20 Drops', '1 Tab', '2 Tab', '3 Tab', '1 Cap', '2 Cap', '1 Spoon (5ml)', '2 Spoon (10ml)', 'Half Spoon (2.5ml)', '1 Puff / Spray', '2 Puff / Spray', 'Local Application (लेप/तेल)'].includes(newMed.dosage) ? newMed.dosage : 'custom'}
-                          onChange={(e) => {
-                            if (e.target.value !== 'custom') {
-                              setNewMed({ ...newMed, dosage: e.target.value });
-                            }
-                          }}
-                          style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 600, backgroundColor: '#ffffff', color: '#0f172a' }}
+                          value={doseUnit}
+                          onChange={(e) => handleDoseUnitChange(e.target.value)}
+                          style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '11px', fontWeight: 700, backgroundColor: '#ffffff', color: '#0f172a' }}
                         >
-                          <option value="15 Drops">15 Drops (15 बूँद)</option>
-                          <option value="10 Drops">10 Drops (10 बूँद)</option>
-                          <option value="5 Drops">5 Drops (5 बूँद)</option>
-                          <option value="20 Drops">20 Drops (20 बूँद)</option>
-                          <option value="1 Tab">1 Tab (1 गोली)</option>
-                          <option value="2 Tab">2 Tab (2 गोली)</option>
-                          <option value="3 Tab">3 Tab (3 गोली)</option>
-                          <option value="1 Cap">1 Cap (1 कैप्सूल)</option>
-                          <option value="2 Cap">2 Cap (2 कैप्सूल)</option>
-                          <option value="1 Spoon (5ml)">1 Spoon (5ml / 1 चम्मच)</option>
-                          <option value="2 Spoon (10ml)">2 Spoon (10ml / 2 चम्मच)</option>
-                          <option value="Half Spoon (2.5ml)">Half Spoon (2.5ml / आधा चम्मच)</option>
-                          <option value="1 Puff / Spray">1 Puff / Spray</option>
-                          <option value="2 Puff / Spray">2 Puff / Spray</option>
-                          <option value="Local Application (लेप/तेल)">Local Application (स्थानिक लेप/तेल)</option>
-                          <option value="custom">✏️ Custom / Type Value...</option>
+                          <optgroup label="Drops & Liquids (बूँद व तरल)">
+                            <option value="Drops">Drops (बूँद / Dilution / Tincture)</option>
+                            <option value="Syrup">Syrup / Liquid (सिरप / तरल - चम्मच/ml)</option>
+                            <option value="Kadha">Kwath / Kadha (काढ़ा / क्वाथ)</option>
+                            <option value="Asava">Asava / Arishta (आसव / अरिष्ट)</option>
+                            <option value="Ark">Ark / Distillate (अर्क)</option>
+                          </optgroup>
+                          <optgroup label="Tablets & Capsules (गोली, वटी व कैप्सूल)">
+                            <option value="Tab">Tab / Tablet (गोली / टेबलेट)</option>
+                            <option value="Vati">Vati / Gutika (वटी / गुटिका)</option>
+                            <option value="Cap">Cap / Softgel (कैप्सूल / सॉफ्टजेल)</option>
+                            <option value="Globules">Globules (मीठी गोली / दाने)</option>
+                            <option value="Effervescent">Effervescent Tab (घुलने वाली गोली)</option>
+                          </optgroup>
+                          <optgroup label="Churna, Bhasma & Powders (चूर्ण, भस्म व पुड़िया)">
+                            <option value="Powder">Churna / Powder (चूर्ण / पाउडर)</option>
+                            <option value="Sachet">Pudiya / Sachet (पुड़िया / सैशे)</option>
+                            <option value="Bhasma">Bhasma / Pishti (भस्म / पिष्टी)</option>
+                            <option value="Granules">Granules (दानेदार ग्रेन्यूल्स)</option>
+                          </optgroup>
+                          <optgroup label="Avaleha, Ghee & Majun (प्राश, घृत व माजून)">
+                            <option value="Avaleha">Prash / Avaleha (प्राश / अवलेह)</option>
+                            <option value="Ghritha">Medicated Ghee (औषधीय घृत)</option>
+                            <option value="Majun">Majun / Khamira (माजून / खमीरा)</option>
+                          </optgroup>
+                          <optgroup label="External & Skin (तेल, लेप, मलहम व साबुन)">
+                            <option value="Oil">Oil / Taila (मालिश तेल / तैलम)</option>
+                            <option value="Ointment">Ointment / Gel (मलहम / जेल / क्रीम)</option>
+                            <option value="Lepa">Herbal Lepa (स्थानिक लेप / लेपन)</option>
+                            <option value="Wash">Medicated Soap / Wash (साबुन / वॉश)</option>
+                            <option value="Patch">Pain Patch (पेन रिलीफ पैच)</option>
+                          </optgroup>
+                          <optgroup label="Drops, Sprays & Gargle (आंख, कान, नाक व गरारे)">
+                            <option value="EyeDrops">Eye Drops (आंख की बूँदें)</option>
+                            <option value="EarDrops">Ear Drops (कान की बूँदें)</option>
+                            <option value="NasalDrops">Nasal Drops / Spray (नाक की बूँदें / स्प्रे)</option>
+                            <option value="Puff">Puff / Inhaler (पफ / इनहेलर / स्प्रे)</option>
+                            <option value="Gargle">Gargle / Mouthwash (कुल्ला / गरारे)</option>
+                          </optgroup>
+                          <optgroup label="Custom / Other (अन्य)">
+                            <option value="custom">Custom / Type Value (अन्य / खुद टाइप करें)</option>
+                          </optgroup>
                         </select>
-                        {(!['15 Drops', '10 Drops', '5 Drops', '20 Drops', '1 Tab', '2 Tab', '3 Tab', '1 Cap', '2 Cap', '1 Spoon (5ml)', '2 Spoon (10ml)', 'Half Spoon (2.5ml)', '1 Puff / Spray', '2 Puff / Spray', 'Local Application (लेप/तेल)'].includes(newMed.dosage)) && (
-                          <input
-                            type="text"
-                            placeholder="Type custom dose..."
-                            value={newMed.dosage}
-                            onChange={(e) => setNewMed({ ...newMed, dosage: e.target.value })}
-                            style={{ width: '100%', marginTop: '4px', padding: '5px 8px', borderRadius: '4px', border: '1px solid #0284c7', fontSize: '11px', fontWeight: 600 }}
-                          />
-                        )}
+
+                        {/* Interactive "Kitne (How Many)" options based on selected Unit */}
+                        <div style={{ marginTop: '5px' }}>
+                          {doseUnit === 'Drops' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>कितने Drops?</span>
+                              {[5, 10, 15, 20, 30].map((cnt) => (
+                                <button
+                                  key={cnt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(cnt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(cnt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(cnt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(cnt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {cnt}
+                                </button>
+                              ))}
+                              <input
+                                type="number"
+                                min="0"
+                                value={doseCount}
+                                onChange={(e) => handleDoseCountChange(e.target.value)}
+                                placeholder="0"
+                                title="Type custom drops count"
+                                style={{ width: '42px', padding: '2px 4px', fontSize: '10px', fontWeight: 700, borderRadius: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}
+                              />
+                            </div>
+                          )}
+
+                          {doseUnit === 'Syrup' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>कितने Spoon/ml?</span>
+                              {[
+                                { label: '1 Spoon (5ml)', val: '1' },
+                                { label: '2 Spoon (10ml)', val: '2' },
+                                { label: 'Half (2.5ml)', val: 'Half' },
+                                { label: '15ml', val: '3' },
+                              ].map((opt) => (
+                                <button
+                                  key={opt.val}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt.val)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt.val) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt.val) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt.val) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Kadha' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>मात्रा:</span>
+                              {['10ml', '20ml', '30ml', '50ml (आधा कप)'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Asava' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>मात्रा:</span>
+                              {['15ml (बराबर पानी)', '20ml (बराबर पानी)', '10ml', '30ml'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Ark' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>अर्क मात्रा:</span>
+                              {['5ml', '10ml', '15ml (पानी में)', '20ml'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Tab' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>कितनी Tab?</span>
+                              {[1, 2, 3, 4].map((cnt) => (
+                                <button
+                                  key={cnt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(cnt)}
+                                  style={{
+                                    padding: '2px 6px',
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(cnt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(cnt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(cnt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {cnt}
+                                </button>
+                              ))}
+                              <input
+                                type="number"
+                                min="1"
+                                value={doseCount}
+                                onChange={(e) => handleDoseCountChange(e.target.value)}
+                                placeholder="अन्य"
+                                style={{ width: '42px', padding: '2px 4px', fontSize: '10px', fontWeight: 700, borderRadius: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}
+                              />
+                            </div>
+                          )}
+
+                          {doseUnit === 'Vati' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>कितनी वटी?</span>
+                              {[1, 2, 3, 4].map((cnt) => (
+                                <button
+                                  key={cnt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(cnt)}
+                                  style={{
+                                    padding: '2px 6px',
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(cnt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(cnt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(cnt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {cnt} वटी
+                                </button>
+                              ))}
+                              <input
+                                type="number"
+                                min="1"
+                                value={doseCount}
+                                onChange={(e) => handleDoseCountChange(e.target.value)}
+                                placeholder="अन्य"
+                                style={{ width: '42px', padding: '2px 4px', fontSize: '10px', fontWeight: 700, borderRadius: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}
+                              />
+                            </div>
+                          )}
+
+                          {doseUnit === 'Cap' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>कितने Cap?</span>
+                              {[1, 2, 3].map((cnt) => (
+                                <button
+                                  key={cnt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(cnt)}
+                                  style={{
+                                    padding: '2px 7px',
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(cnt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(cnt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(cnt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {cnt}
+                                </button>
+                              ))}
+                              <input
+                                type="number"
+                                min="1"
+                                value={doseCount}
+                                onChange={(e) => handleDoseCountChange(e.target.value)}
+                                placeholder="अन्य"
+                                style={{ width: '42px', padding: '2px 4px', fontSize: '10px', fontWeight: 700, borderRadius: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}
+                              />
+                            </div>
+                          )}
+
+                          {doseUnit === 'Globules' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>कितने दाने?</span>
+                              {[2, 4, 6, 8].map((cnt) => (
+                                <button
+                                  key={cnt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(cnt)}
+                                  style={{
+                                    padding: '2px 6px',
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(cnt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(cnt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(cnt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {cnt} दाने
+                                </button>
+                              ))}
+                              <input
+                                type="number"
+                                min="1"
+                                value={doseCount}
+                                onChange={(e) => handleDoseCountChange(e.target.value)}
+                                placeholder="अन्य"
+                                style={{ width: '42px', padding: '2px 4px', fontSize: '10px', fontWeight: 700, borderRadius: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}
+                              />
+                            </div>
+                          )}
+
+                          {doseUnit === 'Effervescent' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>मात्रा:</span>
+                              {['1 गोली (1 गिलास पानी में घोलकर)', '2 गोली (पानी में)', 'आधा गिलास पानी में'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Powder' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>चूर्ण मात्रा:</span>
+                              {['1 चम्मच (5gm)', 'आधा चम्मच (2.5gm)', '3gm', '2 चम्मच (10gm)'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Sachet' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>पुड़िया:</span>
+                              {['1 पुड़िया (Sachet)', '2 पुड़िया', '1 पैकेट (दूध/पानी से)'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Bhasma' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>भस्म/पिष्टी:</span>
+                              {['125mg (1 रत्ती / शहद से)', '250mg (शहद/मलाई से)', '1 चुटकी (चावल बराबर)'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Granules' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>ग्रेन्यूल्स:</span>
+                              {['1 चम्मच (दूध के साथ)', '2 चम्मच (दूध से)', '5gm गुनगुने पानी से'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Avaleha' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>प्राश मात्रा:</span>
+                              {['1 चम्मच (10gm)', 'आधा चम्मच (5gm)', '2 चम्मच (दूध के साथ)'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Ghritha' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>घृत मात्रा:</span>
+                              {['1 चम्मच (दूध के साथ)', 'आधा चम्मच', '5ml खाली पेट'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Majun' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>माजून:</span>
+                              {['5gm (आधा चम्मच)', '10gm (1 चम्मच)', 'रात को सोते समय दूध से'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Oil' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>मालिश:</span>
+                              {['दिन में 2 बार हल्के हाथ से मालिश', 'रात को सोते समय मालिश', 'दिन में 1 बार लगाएं', 'गुनगुना करके मालिश करें'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Ointment' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>मलहम/जेल:</span>
+                              {['प्रभावित जगह पर दिन में 2 बार लगाएं', 'रात को सोते समय लगाएं', 'दिन में 1 बार लगाएं'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Lepa' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>लेपन:</span>
+                              {['हर्बल लेप बनाकर प्रभावित जगह पर लगाएं', '30 मिनट बाद धो लें', 'रात को लेप लगाएं'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Wash' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>साबुन/वॉश:</span>
+                              {['नहाते समय रोजाना प्रयोग करें', 'सप्ताह में 2 बार बाल धोएं', 'प्रभावित त्वचा को धोएं'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Patch' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>पैच:</span>
+                              {['1 पैच (24 घंटे तक दर्द वाले स्थान पर)', '1 पैच (रात को लगाएं)'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'EyeDrops' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>आंख की बूँदें:</span>
+                              {['1-1 बूँद दोनों आंखों में', '2-2 बूँद दोनों आंखों में', 'दिन में 3 बार 1 बूँद'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'EarDrops' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>कान की बूँदें:</span>
+                              {['2-2 बूँद कान में (गुनगुना करके)', '3 बूँद प्रभावित कान में', 'दिन में 2 बार'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'NasalDrops' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>नाक की बूँदें/स्प्रे:</span>
+                              {['2-2 बूँद दोनों नथुनों में (नस्य)', '1 पफ दोनों तरफ स्प्रे', '2 पफ नेजल स्प्रे'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Puff' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>कितने Puff?</span>
+                              {[1, 2, 3].map((cnt) => (
+                                <button
+                                  key={cnt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(cnt)}
+                                  style={{
+                                    padding: '2px 6px',
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(cnt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(cnt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(cnt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {cnt} Puff
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'Gargle' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 800, color: '#0284c7', marginRight: '2px' }}>गरारे/कुल्ला:</span>
+                              {['10ml गुनगुने पानी में डालकर गरारे करें', 'दिन में 2 बार कुल्ला करें', 'खाना खाने के बाद गरारे'].map((opt) => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => handleDoseCountChange(opt)}
+                                  style={{
+                                    padding: '2px 5px',
+                                    fontSize: '9.5px',
+                                    fontWeight: 800,
+                                    borderRadius: '4px',
+                                    border: String(doseCount) === String(opt) ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                                    backgroundColor: String(doseCount) === String(opt) ? '#e0f2fe' : '#ffffff',
+                                    color: String(doseCount) === String(opt) ? '#0369a1' : '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {doseUnit === 'custom' && (
+                            <input
+                              type="text"
+                              placeholder="Type custom dose..."
+                              value={newMed.dosage}
+                              onChange={(e) => setNewMed({ ...newMed, dosage: e.target.value })}
+                              style={{ width: '100%', padding: '4px 8px', borderRadius: '4px', border: '1px solid #0284c7', fontSize: '11px', fontWeight: 600 }}
+                            />
+                          )}
+                        </div>
                       </div>
 
                       {/* Frequency Dropdown */}
@@ -1372,7 +2680,7 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                           <option value="Weekly Twice">Weekly Twice (Short)</option>
                           <option value="Weekly Thrice">Weekly Thrice (Short)</option>
                           <option value="Alternate Days">Alternate Days (Short)</option>
-                          <option value="custom">✏️ Custom / Type Frequency...</option>
+                          <option value="custom">Custom / Type Frequency...</option>
                         </select>
                         {!['BD', 'BD (Twice Daily / दिन में 2 बार)', 'OD', 'OD (Once Daily / दिन में 1 बार)', 'TDS', 'TDS (Thrice Daily / दिन में 3 बार)', 'QID', 'QID (4 Times Daily)', 'HS', 'HS (At Bedtime / रात को सोते समय)', 'SOS', 'SOS (As Needed / आवश्यकतानुसार)', 'Weekly Once', 'Weekly Once (सप्ताह में 1 बार)', 'Weekly Twice', 'Weekly Twice (सप्ताह में 2 बार)', 'Weekly Thrice', 'Weekly Thrice (सप्ताह में 3 बार)', 'Alternate Days', 'Alternate Days (एक दिन छोड़कर)', 'Monthly Once', 'Monthly Once (महीने में 1 बार)', 'Every 15 Days', 'Every 15 Days (15 दिन में 1 बार)'].includes(newMed.frequency) && (
                           <input
@@ -1405,7 +2713,7 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                           <option value="With Warm Water">With Warm Water (गुनगुने पानी के साथ)</option>
                           <option value="With Milk">With Milk (दूध के साथ)</option>
                           <option value="At Bedtime">At Bedtime (रात को सोते समय)</option>
-                          <option value="custom">✏️ Custom / Type Timing...</option>
+                          <option value="custom">Custom / Type Timing...</option>
                         </select>
                         {(!['After Food', 'Before Food', 'Empty Stomach', 'With Warm Water', 'With Milk', 'At Bedtime'].includes(newMed.timing)) && (
                           <input
@@ -1439,7 +2747,7 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                           <option value="2 Months">2 Months</option>
                           <option value="3 Months">3 Months</option>
                           <option value="Continue as advised">Continue as advised</option>
-                          <option value="custom">✏️ Custom / Type Duration...</option>
+                          <option value="custom">Custom / Type Duration...</option>
                         </select>
                         {(!['1 Month', '15 Days', '7 Days', '2 Months', '3 Months', '10 Days', 'Continue as advised'].includes(newMed.duration)) && (
                           <input
@@ -1584,15 +2892,18 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                       </table>
                     </div>
                   ) : (
-                    <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', color: '#64748b', fontSize: '13px', fontWeight: 500 }}>
-                      📋 No custom medicines added yet. Type a medicine name above and click <strong>"+ Add Medicine"</strong> to add.
+                    <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', color: '#64748b', fontSize: '13px', fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <ClipboardList size={18} style={{ color: '#64748b' }} />
+                      <span>No custom medicines added yet. Type a medicine name above and click <strong>"+ Add Medicine"</strong> to add.</span>
                     </div>
                   )}
                 </div>
 
                 <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   {saveMsg ? (
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#16a34a' }}>{saveMsg}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <Check size={16} /> {saveMsg}
+                    </span>
                   ) : <span />}
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <button
@@ -1610,9 +2921,13 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
                         cursor: 'pointer',
                         opacity: savingDetails ? 0.6 : 1,
                         boxShadow: '0 2px 4px rgba(22, 163, 74, 0.25)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
                       }}
                     >
-                      {savingDetails ? 'Saving...' : '💾 Save Details to Database'}
+                      <Save size={16} />
+                      {savingDetails ? 'Saving...' : 'Save Details to Database'}
                     </button>
                     <button
                       type="button"
@@ -1743,6 +3058,25 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
 
               {/* Patient Meta Block */}
               <div style={{ fontSize: '12px', borderBottom: '1px solid #000', paddingBottom: '6px', marginBottom: '8px' }}>
+                {/* Multi-Kit Course Badge */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', paddingBottom: '4px', borderBottom: '1px dashed #cbd5e1' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ backgroundColor: '#0f172a', color: '#ffffff', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800, letterSpacing: '0.5px' }}>
+                      COURSE / KIT: KIT {selectedKitNumber} ({selectedKitNumber === 1 ? '1ST MONTH / INITIAL COURSE' : selectedKitNumber === 2 ? '2ND MONTH / RE-ORDER KIT' : selectedKitNumber === 3 ? '3RD MONTH / RE-ORDER KIT' : `${selectedKitNumber}TH MONTH / RE-ORDER KIT`})
+                    </span>
+                    {allKits.length > 1 && (
+                      <span style={{ fontSize: '10px', color: '#475569', fontWeight: 700 }}>
+                        (Total Recorded Courses: {allKits.length})
+                      </span>
+                    )}
+                  </div>
+                  {currentPrescriptionCreatedAt && (
+                    <div style={{ fontSize: '10px', color: '#334155', fontWeight: 600 }}>
+                      Course Date: {new Date(currentPrescriptionCreatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 2fr 1.5fr', gap: '4px', marginBottom: '4px' }}>
                   <div>
                     Patient Name : <strong style={{ textTransform: 'capitalize' }}>{patientInfo.name}</strong> {patientInfo.statusTag}

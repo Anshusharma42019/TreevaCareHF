@@ -156,6 +156,8 @@ export default function ShipmaxxFollowup() {
       pid: ord.order_id,
       amount: ord.sub_total ?? ord.amount,
       department: dept,
+      kit_number: ord.kit_number || 1,
+      kitNumber: ord.kit_number || 1,
       problem: ord.verification_problem || ord.problem || ord.lead_id?.problem || '',
       verifiedBy: ord.verified_by?.name || ord.verifiedBy?.name || '',
       doctorName: ord.doctorName || ord.created_by?.name || ord.task_created_by?.name || '',

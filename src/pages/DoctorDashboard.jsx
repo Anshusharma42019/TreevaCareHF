@@ -936,6 +936,7 @@ export default function DoctorDashboard() {
                                       maritalStatus: item.maritalStatus || item.lead?.maritalStatus || item.lead_id?.maritalStatus,
                                       occupation: item.occupation || item.lead?.occupation || item.lead_id?.occupation,
                                       since: item.since || item.problemDuration || item.lead?.problemDuration || item.lead_id?.problemDuration,
+                                      kit_number: item.kit_number || item.kitNumber || 1,
                                     });
                                     setPrescriptionOpen(true);
                                   }}
@@ -1174,6 +1175,7 @@ export default function DoctorDashboard() {
                         verifiedBy: f.verifiedBy || f.raw?.verifiedBy || f.raw?.verified_by || f.raw?.assignedTo,
                         doctorName: f.doctorName || f.raw?.doctorName,
                         assignedTo: f.assignedTo || f.raw?.assignedTo,
+                        kit_number: f.raw?.kit_number || f.kit_number || 1,
                         raw: f.raw,
                       });
                       setPrescriptionOpen(true);
@@ -1237,6 +1239,7 @@ export default function DoctorDashboard() {
                               verifiedBy: f.verifiedBy || f.raw?.verifiedBy || f.raw?.verified_by || f.raw?.assignedTo,
                               doctorName: f.doctorName || f.raw?.doctorName,
                               assignedTo: f.assignedTo || f.raw?.assignedTo,
+                              kit_number: f.raw?.kit_number || f.kit_number || 1,
                               raw: f.raw,
                             });
                             setPrescriptionOpen(true);
