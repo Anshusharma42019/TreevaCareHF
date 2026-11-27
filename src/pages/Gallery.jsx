@@ -9,6 +9,7 @@ import {
   lookupCustomer,
   getReportViewUrl,
   getReportDownloadUrl,
+  fetchReportBlob,
 } from '../services/gallery.service';
 import Modal from '../components/ui/Modal';
 import {
@@ -119,6 +120,48 @@ export default function Gallery() {
   const [zoomScale, setZoomScale] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [pdfViewMode, setPdfViewMode] = useState('google'); // 'google' | 'direct'
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState(false);
+
+  // Load PDF as blob to completely prevent iframe cross-domain / X-Frame-Options blocking
+  useEffect(() => {
+    let active = true;
+    let createdUrl = null;
+
+    if (
+      activeViewerReport &&
+      (activeViewerReport.fileType === 'pdf' || activeViewerReport.fileType === 'document')
+    ) {
+      setPdfLoading(true);
+      setPdfError(false);
+
+      fetchReportBlob(activeViewerReport._id)
+        .then((blob) => {
+          if (!active) return;
+          createdUrl = URL.createObjectURL(blob);
+          setPdfBlobUrl(createdUrl);
+          setPdfLoading(false);
+        })
+        .catch((err) => {
+          if (!active) return;
+          console.error('Failed to load PDF preview blob', err);
+          setPdfError(true);
+          setPdfLoading(false);
+        });
+    } else {
+      setPdfBlobUrl(null);
+      setPdfLoading(false);
+      setPdfError(false);
+    }
+
+    return () => {
+      active = false;
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [activeViewerReport]);
 
   // Fetch reports
   const fetchReports = useCallback(async () => {
@@ -1105,7 +1148,7 @@ export default function Gallery() {
                   </>
                 )}
                 <a
-                  href={getReportDownloadUrl(activeViewerReport._id)}
+                  href={pdfBlobUrl || getReportDownloadUrl(activeViewerReport._id)}
                   download={activeViewerReport.fileName || 'report.pdf'}
                   className="p-1.5 sm:p-2 hover:bg-white/10 rounded-xl text-emerald-400 hover:text-emerald-300 transition"
                   title="Download File"
@@ -1113,7 +1156,7 @@ export default function Gallery() {
                   <Download className="w-4 h-4" />
                 </a>
                 <a
-                  href={getReportViewUrl(activeViewerReport._id)}
+                  href={pdfBlobUrl || getReportViewUrl(activeViewerReport._id)}
                   target="_blank"
                   rel="noreferrer"
                   className="p-1.5 sm:p-2 hover:bg-white/10 rounded-xl text-blue-400 hover:text-blue-300 transition"
@@ -1145,7 +1188,7 @@ export default function Gallery() {
 
                     <div className="flex items-center gap-2">
                       <a
-                        href={getReportViewUrl(activeViewerReport._id)}
+                        href={pdfBlobUrl || getReportViewUrl(activeViewerReport._id)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-bold flex items-center gap-1.5 transition text-xs shadow-md"
@@ -1154,7 +1197,7 @@ export default function Gallery() {
                         Open PDF in New Window
                       </a>
                       <a
-                        href={getReportDownloadUrl(activeViewerReport._id)}
+                        href={pdfBlobUrl || getReportDownloadUrl(activeViewerReport._id)}
                         download={activeViewerReport.fileName || 'report.pdf'}
                         className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold flex items-center gap-1.5 transition text-xs"
                       >
@@ -1164,13 +1207,49 @@ export default function Gallery() {
                     </div>
                   </div>
 
-                  {/* PDF Native Viewer Iframe */}
-                  <div className="flex-1 bg-white relative w-full h-full min-h-[300px]">
-                    <iframe
-                      src={getReportViewUrl(activeViewerReport._id)}
-                      title={activeViewerReport.reportTitle}
-                      className="w-full h-full border-0"
-                    />
+                  {/* PDF Native Viewer Container */}
+                  <div className="flex-1 bg-white relative w-full h-full min-h-[300px] flex items-center justify-center">
+                    {pdfLoading ? (
+                      <div className="flex flex-col items-center justify-center gap-3 text-slate-600">
+                        <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
+                        <span className="text-sm font-semibold">Loading document preview...</span>
+                      </div>
+                    ) : pdfError ? (
+                      <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
+                        <FileText className="w-12 h-12 text-rose-500" />
+                        <p className="text-sm font-semibold text-gray-800">
+                          Could not render direct preview inside this frame.
+                        </p>
+                        <p className="text-xs text-gray-500 max-w-sm">
+                          You can still open the PDF directly in a new tab or download it.
+                        </p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <a
+                            href={getReportViewUrl(activeViewerReport._id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition flex items-center gap-1.5 shadow"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Open in New Tab
+                          </a>
+                          <a
+                            href={getReportDownloadUrl(activeViewerReport._id)}
+                            download={activeViewerReport.fileName || 'report.pdf'}
+                            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 transition flex items-center gap-1.5"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Download File
+                          </a>
+                        </div>
+                      </div>
+                    ) : pdfBlobUrl ? (
+                      <iframe
+                        src={pdfBlobUrl}
+                        title={activeViewerReport.reportTitle}
+                        className="w-full h-full border-0"
+                      />
+                    ) : null}
                   </div>
                 </div>
               ) : (

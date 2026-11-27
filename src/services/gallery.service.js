@@ -6,6 +6,9 @@ const BASE_URL = isLocalDev ? '/api/v1' : (import.meta.env.VITE_API_BASE_URL || 
 export const getReportViewUrl = (id) => `${BASE_URL}/gallery/view/${id}`;
 export const getReportDownloadUrl = (id) => `${BASE_URL}/gallery/download/${id}`;
 
+export const fetchReportBlob = (id) =>
+  API.get(`/gallery/view/${id}`, { responseType: 'blob' }).then((r) => r.data);
+
 export const getReports = (params) =>
   API.get('/gallery', { params }).then((r) => r.data.data);
 
