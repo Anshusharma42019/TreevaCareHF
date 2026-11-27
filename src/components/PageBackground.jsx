@@ -23,6 +23,7 @@ const BACKGROUND_MAP = {
   '/notifications': '/bg_leads.jpg',
   '/account': '/bg_doctor.jpg',
   '/account/delivered': '/bg_shipment.jpg',
+  '/gallery': '/bg_doctor.jpg',
 };
 
 const DEFAULT_BACKGROUND = '/botanical_bg.jpg';

@@ -30,6 +30,7 @@ const Whatsapp = lazy(() => import('./pages/Whatsapp'));
 const OpsDashboard = lazy(() => import('./pages/OpsDashboard'));
 const StaffActivity = lazy(() => import('./pages/StaffActivity'));
 const Account = lazy(() => import('./pages/Account'));
+const Gallery = lazy(() => import('./pages/Gallery'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-full min-h-[300px]">
@@ -104,6 +105,9 @@ function AppRoutes() {
         } />
         <Route path="account/delivered" element={
           <ProtectedRoute roles={['admin', 'manager']}><Account /></ProtectedRoute>
+        } />
+        <Route path="gallery" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'doctor', 'logistics', 'staff']}><Gallery /></ProtectedRoute>
         } />
         <Route path="whatsapp" element={
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'support']}><Whatsapp /></ProtectedRoute>
