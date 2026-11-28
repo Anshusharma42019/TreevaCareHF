@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import * as smxSvc from '../services/shipmaxx.service';
@@ -193,6 +193,179 @@ const getDateParams = (preset, customFrom, customTo) => {
   return {};
 };
 
+// Memoized Individual Order Card Component
+const OrderCardItem = memo(function OrderCardItem({
+  rawOrder,
+  selectedStatus,
+  commentsList = [],
+  onSaveNote,
+  navigate,
+  savingNote,
+  noteError,
+}) {
+  const order = useMemo(() => resolveOrder(rawOrder), [rawOrder]);
+  const [localNote, setLocalNote] = useState('');
+
+  const trackingUrl = useMemo(() => {
+    if (!order.awb_code) return '';
+    const c = (order.courier_name || '').toLowerCase();
+    if (c.includes('shadowfax')) return `https://tracker.shadowfax.in/track?awb=${order.awb_code}`;
+    if (c.includes('delhivery')) return `https://www.delhivery.com/tracking`;
+    if (c.includes('xpressbees')) return `https://www.xpressbees.com/track?awb=${order.awb_code}`;
+    if (c.includes('ecom')) return `https://ecomexpress.in/tracking/?awb=${order.awb_code}`;
+    if (c.includes('bluedart')) return `https://www.bluedart.com/tracking`;
+    if (c.includes('amazon') || c.includes('ats')) return `https://track.amazon.in/tracking/${order.awb_code}`;
+    return `https://shipmaxx.in/track/${order.awb_code}`;
+  }, [order.awb_code, order.courier_name]);
+
+  const filteredComments = useMemo(() => {
+    return (commentsList || []).filter(c => c.type !== 'followup' && !String(c.text || '').toLowerCase().includes('whatsapp reply'));
+  }, [commentsList]);
+
+  const handleAdd = (e) => {
+    e.stopPropagation();
+    const text = localNote.trim();
+    if (!text) return;
+    onSaveNote(order._id, text, () => setLocalNote(''));
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-all">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 cursor-pointer group" onClick={() => navigate(`/orders/${order.order_id}`)}>
+          <p className="text-xs text-gray-400 font-semibold group-hover:text-green-600 transition-colors">Order</p>
+          <p className="text-sm font-bold text-gray-800 truncate group-hover:text-green-600 transition-colors underline decoration-dotted underline-offset-2">{order.order_id || '-'}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${STATUS_STYLES[normalizeStatus(order.status)] || 'border-gray-200 bg-gray-50 text-gray-600'}`}>
+            {formatStatusLabel(order.status || selectedStatus)}
+          </span>
+          <div className="flex flex-col items-end">
+            {(order.delivered_at || order.status_updated_at) && (
+              <span className="text-[10px] text-gray-500 font-bold bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 whitespace-nowrap">
+                {new Date(order.delivered_at || order.status_updated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                {', '}
+                {new Date(order.delivered_at || order.status_updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </span>
+            )}
+            {(normalizeStatus(order.status).includes('DELIVERY') || normalizeStatus(order.status).includes('UNDELIVERED')) && order.delivery_attempt && (
+              <span className="text-[9px] text-blue-600 font-extrabold mt-0.5 uppercase tracking-tighter bg-blue-50 px-1 rounded">
+                {order.delivery_attempt === 1 ? '1st' : order.delivery_attempt === 2 ? '2nd' : order.delivery_attempt === 3 ? '3rd' : `${order.delivery_attempt}th`} ATTEMPT
+                {new Date(order.status_updated_at).toDateString() === new Date().toDateString() ? ' - TODAY' : ''}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <p className="text-gray-400 font-semibold">Customer</p>
+          <p className="font-semibold text-gray-700 truncate">{order.billing_customer_name || '-'}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 font-semibold">Staff</p>
+          <p className="font-semibold text-gray-700 truncate">{order.staff_name || '-'}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 font-semibold">Phone</p>
+          <p className="font-semibold text-gray-700 truncate">{order.billing_phone || '-'}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 font-semibold">Location</p>
+          <p className="font-semibold text-gray-700 truncate">
+            {[order.billing_city, order.billing_state, order.billing_pincode].filter(Boolean).join(', ') || '-'}
+          </p>
+        </div>
+        <div>
+          <p className="text-gray-400 font-semibold">Order Date</p>
+          <p className="font-semibold text-gray-700">{formatDateTime(order.createdAt)}</p>
+        </div>
+        <div onClick={e => e.stopPropagation()}>
+          <p className="text-gray-400 font-semibold">AWB</p>
+          {trackingUrl ? (
+            <a 
+              href={trackingUrl} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="font-mono font-bold text-blue-600 truncate hover:underline"
+            >
+              {order.awb_code}
+            </a>
+          ) : (
+            <p className="font-mono font-semibold text-gray-400 truncate">-</p>
+          )}
+        </div>
+        <div>
+          <p className="text-gray-400 font-semibold">Courier</p>
+          <p className="font-semibold text-gray-700 truncate">{order.courier_name || '-'}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 font-semibold">Payment</p>
+          <p className="font-semibold text-gray-700 truncate">{order.payment_method || '-'}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 font-semibold">Amount</p>
+          <p className="font-bold text-gray-800">{formatMoney(order.sub_total)}</p>
+        </div>
+      </div>
+      {order.order_items?.length > 0 && (
+        <div className="mt-4 rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-[11px] text-gray-400 font-semibold mb-1">Items</p>
+          <p className="text-xs text-gray-700 truncate">
+            {order.order_items.map(item => `${item.name || 'Item'} x${item.units || 1}`).join(', ')}
+          </p>
+        </div>
+      )}
+      {/* Comments */}
+      <div className="mt-3" onClick={e => e.stopPropagation()}>
+        <p className="text-[11px] text-gray-400 font-semibold mb-2">Comments</p>
+        {filteredComments.length > 0 && (
+          <div className="mb-2 space-y-1.5 max-h-40 overflow-y-auto">
+            {filteredComments.map((c, i) => (
+              <div key={i} className="bg-gray-50 rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="text-[10px] font-bold text-green-700">
+                    {c.createdBy?.name || 'Unknown'}
+                    <span className="text-gray-400 font-normal ml-1 capitalize">({c.createdBy?.role || 'user'})</span>
+                  </span>
+                  <span className="text-[10px] font-semibold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 whitespace-nowrap">
+                    🕐 {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}
+                  </span>
+                </div>
+                {c.section ? (
+                  <span className="inline-block text-[9px] font-bold uppercase tracking-wide text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded mb-1">
+                    📌 {formatStatusLabel(c.section)}
+                  </span>
+                ) : null}
+                <p className="text-xs text-gray-700">{c.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Add new comment */}
+        <div className="flex gap-2">
+          <textarea
+            rows={2}
+            placeholder="Add a comment..."
+            value={localNote}
+            onChange={e => setLocalNote(e.target.value)}
+            className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-green-500 bg-gray-50"
+          />
+          <button
+            onClick={handleAdd}
+            disabled={savingNote === order._id || !localNote.trim()}
+            className="self-end px-3 py-2 rounded-xl bg-green-600 text-white text-[11px] font-bold hover:bg-green-700 disabled:opacity-50 transition shrink-0">
+            {savingNote === order._id ? '...' : 'Add'}
+          </button>
+        </div>
+        {noteError && (
+          <p className="text-[10px] mt-1 font-semibold text-red-500">{noteError}</p>
+        )}
+      </div>
+    </div>
+  );
+});
+
 export default function OrderStatusBoard({
   title = 'Order Status',
   subtitle,
@@ -218,22 +391,27 @@ export default function OrderStatusBoard({
   const [statusError, setStatusError] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
-  const [noteInput, setNoteInput] = useState({});   // { [_id]: string }
   const [comments, setComments] = useState({});      // { [_id]: [{text, createdAt}] }
   const [savingNote, setSavingNote] = useState(null);
   const [noteError, setNoteError] = useState({});
+  const [visibleCount, setVisibleCount] = useState(20);
   const navigate = useNavigate();
+
+  const onStatsChangeRef = useRef(onStatsChange);
+  useEffect(() => {
+    onStatsChangeRef.current = onStatsChange;
+  }, [onStatsChange]);
 
   const loadDelivered = useCallback((params = {}) => {
     svc.getDeliveredStats(params).then(res => {
       const { count, revenue, statusBreakdown } = res.data?.data || {};
       const stats = { count: count || 0, revenue: revenue || 0, statusBreakdown: statusBreakdown || [] };
       setDeliveredStats(stats);
-      onStatsChange?.(stats);
+      onStatsChangeRef.current?.(stats);
     }).catch((err) => {
       console.error('[OrderStatusBoard] Error loading delivered stats:', err.response?.data?.message || err.message);
     });
-  }, [onStatsChange, svc]);
+  }, [svc]);
 
   const loadStatusOrders = useCallback((status, params = {}, silent = false) => {
     if (!silent) {
@@ -241,11 +419,11 @@ export default function OrderStatusBoard({
       setStatusError('');
       setStatusOrders([]);
     }
-    svc.getStatusOrders({ ...params, status, limit: 500 }).then(res => {
+    svc.getStatusOrders({ ...params, status, limit: 100 }).then(res => {
       const list = res.data?.data?.data || [];
-      setStatusOrders(list);
       const c = {};
       list.forEach(o => { c[o._id] = o.comments || []; });
+      setStatusOrders(list);
       setComments(prev => ({ ...prev, ...c }));
     }).catch(e => {
       setStatusOrders([]);
@@ -268,7 +446,7 @@ export default function OrderStatusBoard({
     return base;
   }, [filterParams, datePreset, filterFrom, filterTo, department]);
 
-  // Load delivered stats whenever filter params change (NOT on selectedStatus change)
+  // Load delivered stats whenever filter params change
   useEffect(() => {
     const params = getParams();
     if (!filterParams && datePreset === 'custom' && (!filterFrom || !filterTo)) return;
@@ -277,13 +455,10 @@ export default function OrderStatusBoard({
 
     const interval = setInterval(() => {
       loadDelivered(params);
-      if (selectedStatus) {
-        loadStatusOrders(selectedStatus, params, true);
-      }
-    }, fastPoll ? 3000 : 15000);
+    }, fastPoll ? 4000 : 45000);
 
     return () => clearInterval(interval);
-  }, [getParams, filterParams, datePreset, filterFrom, filterTo, loadDelivered, fastPoll, selectedStatus, loadStatusOrders]);
+  }, [getParams, filterParams, datePreset, filterFrom, filterTo, loadDelivered, fastPoll]);
 
   // Load status orders when selectedStatus or params change
   useEffect(() => {
@@ -293,22 +468,19 @@ export default function OrderStatusBoard({
     loadStatusOrders(selectedStatus, params);
   }, [selectedStatus, getParams, filterParams, datePreset, filterFrom, filterTo, loadStatusOrders]);
 
-  const handleSaveNote = async (e, mongoId) => {
-    e.stopPropagation();
-    const text = (noteInput[mongoId] ?? '').trim();
-    if (!text) return;
+  const handleSaveNote = useCallback(async (mongoId, text, onSuccess) => {
     setSavingNote(mongoId);
     setNoteError(prev => ({ ...prev, [mongoId]: '' }));
     try {
       const res = await svc.saveOrderNote(mongoId, text, 'general', selectedStatus);
       setComments(prev => ({ ...prev, [mongoId]: res.data?.data || [] }));
-      setNoteInput(prev => ({ ...prev, [mongoId]: '' }));
+      onSuccess?.();
     } catch (err) {
       setNoteError(prev => ({ ...prev, [mongoId]: err?.response?.data?.message || 'Save failed' }));
     } finally {
       setSavingNote(null);
     }
-  };
+  }, [selectedStatus, svc]);
 
   const applyDateFilter = useCallback((preset = datePreset, from = filterFrom, to = filterTo, dept = department) => {
     if (preset === 'custom' && (!from || !to)) return;
@@ -356,42 +528,47 @@ export default function OrderStatusBoard({
   };
 
   const openStatusDetails = (status) => {
+    if (selectedStatus === status) return;
     setSelectedStatus(status);
-    const params = getParams();
-    loadStatusOrders(status, params);
+    setVisibleCount(20);
   };
 
-  const statusCounts = deliveredStats.statusBreakdown.reduce((acc, item) => {
-    const key = normalizeStatus(item._id);
-    acc[key] = (acc[key] || 0) + item.count;
-    return acc;
-  }, {});
+  const statusCounts = useMemo(() => {
+    return (deliveredStats.statusBreakdown || []).reduce((acc, item) => {
+      const key = normalizeStatus(item._id);
+      acc[key] = (acc[key] || 0) + item.count;
+      return acc;
+    }, {});
+  }, [deliveredStats.statusBreakdown]);
 
+  const statusCards = useMemo(() => {
+    const listedStatuses = new Set(STATUS_LIST.map(normalizeStatus));
+    const allowedSet = allowedStatuses ? new Set(allowedStatuses.map(normalizeStatus)) : null;
+    const rawCards = allowedSet
+      ? [
+          ...allowedStatuses.map(status => ({ status: normalizeStatus(status), count: statusCounts[normalizeStatus(status)] || 0 })),
+          ...(deliveredStats.statusBreakdown || [])
+            .filter(item => item._id && item.count > 0 && !allowedSet.has(normalizeStatus(item._id)))
+            .map(item => ({ status: normalizeStatus(item._id), count: item.count })),
+        ]
+      : [
+          ...STATUS_LIST.map(status => ({ status: normalizeStatus(status), count: statusCounts[normalizeStatus(status)] || 0 })),
+          ...(deliveredStats.statusBreakdown || [])
+            .filter(item => item._id && !listedStatuses.has(normalizeStatus(item._id)))
+            .map(item => ({ status: normalizeStatus(item._id), count: item.count })),
+        ];
 
-  const listedStatuses = new Set(STATUS_LIST.map(normalizeStatus));
-  const allowedSet = allowedStatuses ? new Set(allowedStatuses.map(normalizeStatus)) : null;
-  const rawCards = allowedSet
-    ? [
-        ...allowedStatuses.map(status => ({ status: normalizeStatus(status), count: statusCounts[normalizeStatus(status)] || 0 })),
-        ...deliveredStats.statusBreakdown
-          .filter(item => item._id && item.count > 0 && !allowedSet.has(normalizeStatus(item._id)))
-          .map(item => ({ status: normalizeStatus(item._id), count: item.count })),
-      ]
-    : [
-        ...STATUS_LIST.map(status => ({ status: normalizeStatus(status), count: statusCounts[normalizeStatus(status)] || 0 })),
-        ...deliveredStats.statusBreakdown
-          .filter(item => item._id && !listedStatuses.has(normalizeStatus(item._id)))
-          .map(item => ({ status: normalizeStatus(item._id), count: item.count })),
-      ];
+    const seenStatuses = new Set();
+    return rawCards.filter(card => {
+      if (seenStatuses.has(card.status)) return false;
+      seenStatuses.add(card.status);
+      return true;
+    });
+  }, [allowedStatuses, deliveredStats.statusBreakdown, statusCounts]);
 
-  const seenStatuses = new Set();
-  const statusCards = rawCards.filter(card => {
-    if (seenStatuses.has(card.status)) return false;
-    seenStatuses.add(card.status);
-    return true;
-  });
-
-  const orderTotal = statusCards.reduce((sum, card) => sum + card.count, 0);
+  const orderTotal = useMemo(() => {
+    return statusCards.reduce((sum, card) => sum + card.count, 0);
+  }, [statusCards]);
 
   return (
     <div className={cardCls} style={cardStyle}>
@@ -531,158 +708,36 @@ export default function OrderStatusBoard({
             </div>
           )}
           {!statusLoading && !statusError && statusOrders.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {statusOrders.map(rawOrder => {
-              const order = resolveOrder(rawOrder);
-              return (
-                <div key={order._id}
-                  className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-all">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 cursor-pointer group" onClick={() => navigate(`/orders/${order.order_id}`)}>
-                      <p className="text-xs text-gray-400 font-semibold group-hover:text-green-600 transition-colors">Order</p>
-                      <p className="text-sm font-bold text-gray-800 truncate group-hover:text-green-600 transition-colors underline decoration-dotted underline-offset-2">{order.order_id || '-'}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${STATUS_STYLES[normalizeStatus(order.status)] || 'border-gray-200 bg-gray-50 text-gray-600'}`}>
-                        {formatStatusLabel(order.status || selectedStatus)}
-                      </span>
-                      <div className="flex flex-col items-end">
-                        {(order.delivered_at || order.status_updated_at) && (
-                          <span className="text-[10px] text-gray-500 font-bold bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 whitespace-nowrap">
-                            {new Date(order.delivered_at || order.status_updated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                            {', '}
-                            {new Date(order.delivered_at || order.status_updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                          </span>
-                        )}
-                        {(normalizeStatus(order.status).includes('DELIVERY') || normalizeStatus(order.status).includes('UNDELIVERED')) && order.delivery_attempt && (
-                          <span className="text-[9px] text-blue-600 font-extrabold mt-0.5 uppercase tracking-tighter bg-blue-50 px-1 rounded">
-                            {order.delivery_attempt === 1 ? '1st' : order.delivery_attempt === 2 ? '2nd' : order.delivery_attempt === 3 ? '3rd' : `${order.delivery_attempt}th`} ATTEMPT
-                            {new Date(order.status_updated_at).toDateString() === new Date().toDateString() ? ' - TODAY' : ''}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <p className="text-gray-400 font-semibold">Customer</p>
-                      <p className="font-semibold text-gray-700 truncate">{order.billing_customer_name || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 font-semibold">Staff</p>
-                      <p className="font-semibold text-gray-700 truncate">{order.staff_name || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 font-semibold">Phone</p>
-                      <p className="font-semibold text-gray-700 truncate">{order.billing_phone || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 font-semibold">Location</p>
-                      <p className="font-semibold text-gray-700 truncate">
-                        {[order.billing_city, order.billing_state, order.billing_pincode].filter(Boolean).join(', ') || '-'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 font-semibold">Order Date</p>
-                      <p className="font-semibold text-gray-700">{formatDateTime(order.createdAt)}</p>
-                    </div>
-                    <div onClick={e => e.stopPropagation()}>
-                      <p className="text-gray-400 font-semibold">AWB</p>
-                      {order.awb_code
-                        ? (
-                          <a 
-                            href={(function() {
-                              const c = (order.courier_name || '').toLowerCase();
-                              if (c.includes('shadowfax')) return `https://tracker.shadowfax.in/track?awb=${order.awb_code}`;
-                              if (c.includes('delhivery')) return `https://www.delhivery.com/tracking`;
-                              if (c.includes('xpressbees')) return `https://www.xpressbees.com/track?awb=${order.awb_code}`;
-                              if (c.includes('ecom')) return `https://ecomexpress.in/tracking/?awb=${order.awb_code}`;
-                              if (c.includes('bluedart')) return `https://www.bluedart.com/tracking`;
-                              if (c.includes('amazon') || c.includes('ats')) return `https://track.amazon.in/tracking/${order.awb_code}`;
-                              return `https://shipmaxx.in/track/${order.awb_code}`;
-                            })()} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="font-mono font-bold text-blue-600 truncate hover:underline"
-                          >
-                            {order.awb_code}
-                          </a>
-                        )
-                        : <p className="font-mono font-semibold text-gray-400 truncate">-</p>
-                      }
-                    </div>
-                    <div>
-                      <p className="text-gray-400 font-semibold">Courier</p>
-                      <p className="font-semibold text-gray-700 truncate">{order.courier_name || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 font-semibold">Payment</p>
-                      <p className="font-semibold text-gray-700 truncate">{order.payment_method || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 font-semibold">Amount</p>
-                      <p className="font-bold text-gray-800">{formatMoney(order.sub_total)}</p>
-                    </div>
-                  </div>
-                  {order.order_items?.length > 0 && (
-                    <div className="mt-4 rounded-lg bg-gray-50 px-3 py-2">
-                      <p className="text-[11px] text-gray-400 font-semibold mb-1">Items</p>
-                      <p className="text-xs text-gray-700 truncate">
-                        {order.order_items.map(item => `${item.name || 'Item'} x${item.units || 1}`).join(', ')}
-                      </p>
-                    </div>
-                  )}
-                  {/* Comments */}
-                  <div className="mt-3" onClick={e => e.stopPropagation()}>
-                    <p className="text-[11px] text-gray-400 font-semibold mb-2">Comments</p>
-                    {/* Existing comments list */}
-                    {(comments[order._id] || []).filter(c => c.type !== 'followup' && !String(c.text || '').toLowerCase().includes('whatsapp reply')).length > 0 && (
-                      <div className="mb-2 space-y-1.5 max-h-40 overflow-y-auto">
-                        {(comments[order._id] || []).filter(c => c.type !== 'followup' && !String(c.text || '').toLowerCase().includes('whatsapp reply')).map((c, i) => (
-                          <div key={i} className="bg-gray-50 rounded-lg px-3 py-2">
-                            <div className="flex items-center justify-between gap-2 mb-0.5">
-                              <span className="text-[10px] font-bold text-green-700">
-                                {c.createdBy?.name || 'Unknown'}
-                                <span className="text-gray-400 font-normal ml-1 capitalize">({c.createdBy?.role || 'user'})</span>
-                              </span>
-                              <span className="text-[10px] font-semibold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 whitespace-nowrap">
-                                🕐 {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}
-                              </span>
-                            </div>
-                            {c.section ? (
-                              <span className="inline-block text-[9px] font-bold uppercase tracking-wide text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded mb-1">
-                                📌 {formatStatusLabel(c.section)}
-                              </span>
-                            ) : null}
-                            <p className="text-xs text-gray-700">{c.text}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {/* Add new comment */}
-                    <div className="flex gap-2">
-                      <textarea
-                        rows={2}
-                        placeholder="Add a comment..."
-                        value={noteInput[order._id] || ''}
-                        onChange={e => setNoteInput(prev => ({ ...prev, [order._id]: e.target.value }))}
-                        className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-green-500 bg-gray-50"
-                      />
-                      <button
-                        onClick={e => handleSaveNote(e, order._id)}
-                        disabled={savingNote === order._id || !(noteInput[order._id] || '').trim()}
-                        className="self-end px-3 py-2 rounded-xl bg-green-600 text-white text-[11px] font-bold hover:bg-green-700 disabled:opacity-50 transition shrink-0">
-                        {savingNote === order._id ? '...' : 'Add'}
-                      </button>
-                    </div>
-                    {noteError[order._id] && (
-                      <p className="text-[10px] mt-1 font-semibold text-red-500">{noteError[order._id]}</p>
-                    )}
-                  </div>
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {statusOrders.slice(0, visibleCount).map(rawOrder => (
+                  <OrderCardItem
+                    key={rawOrder._id}
+                    rawOrder={rawOrder}
+                    selectedStatus={selectedStatus}
+                    commentsList={comments[rawOrder._id]}
+                    onSaveNote={handleSaveNote}
+                    navigate={navigate}
+                    savingNote={savingNote}
+                    noteError={noteError[rawOrder._id]}
+                  />
+                ))}
+              </div>
+              {statusOrders.length > visibleCount && (
+                <div className="mt-4 flex items-center justify-center gap-3">
+                  <button
+                    onClick={() => setVisibleCount(prev => prev + 20)}
+                    className="h-9 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition">
+                    Show More (+20) • Viewing {visibleCount} of {statusOrders.length}
+                  </button>
+                  <button
+                    onClick={() => setVisibleCount(statusOrders.length)}
+                    className="h-9 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition">
+                    Show All ({statusOrders.length})
+                  </button>
                 </div>
-              );
-              })}
-            </div>
+              )}
+            </>
           )}
         </div>
       )}

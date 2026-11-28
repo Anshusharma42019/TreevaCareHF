@@ -32,6 +32,32 @@ const PAGE_TITLES = {
   '/ops-dashboard': 'Ops Dashboard',
 };
 
+// Isolated Shift Timer to prevent re-rendering the whole Layout every 1 second
+function ShiftTimer({ checkIn, checkOut }) {
+  const [time, setTime] = useState('00h 00m 00s');
+
+  useEffect(() => {
+    if (!checkIn || checkOut) {
+      setTime('00h 00m 00s');
+      return;
+    }
+    const checkInTime = new Date(checkIn).getTime();
+    const update = () => {
+      const diffMs = Date.now() - checkInTime;
+      const hours = Math.floor(diffMs / 3600000);
+      const minutes = Math.floor((diffMs % 3600000) / 60000);
+      const seconds = Math.floor((diffMs % 60000) / 1000);
+      const pad = (n) => String(n).padStart(2, '0');
+      setTime(`${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [checkIn, checkOut]);
+
+  return <p className="text-sm font-black text-white tracking-tight font-mono mt-0.5">{time}</p>;
+}
+
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -89,7 +115,7 @@ export default function Layout() {
   const [attLoading, setAttLoading] = useState(false);
   const lastNotifRef = useRef(null);
   const [commissionStats, setCommissionStats] = useState(null);
-  const [shiftTime, setShiftTime] = useState('00h 00m 00s');
+  const [avatarImgError, setAvatarImgError] = useState(false);
   const [whatsappUnreadCount, setWhatsappUnreadCount] = useState(0);
   const prevWhatsappUnreadRef = useRef(0);
 
@@ -144,23 +170,7 @@ export default function Layout() {
     }
   }, [user]);
 
-  // Running Shift Timer
-  useEffect(() => {
-    if (!attStatus?.checkIn || attStatus?.checkOut) {
-      setShiftTime('00h 00m 00s');
-      return;
-    }
-    const checkInTime = new Date(attStatus.checkIn).getTime();
-    const interval = setInterval(() => {
-      const diffMs = Date.now() - checkInTime;
-      const hours = Math.floor(diffMs / 3600000);
-      const minutes = Math.floor((diffMs % 3600000) / 60000);
-      const seconds = Math.floor((diffMs % 60000) / 1000);
-      const pad = (n) => String(n).padStart(2, '0');
-      setShiftTime(`${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [attStatus]);
+
 
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
@@ -357,9 +367,9 @@ export default function Layout() {
         }
       } catch {}
     };
-    // Delay first poll slightly so page loads first
-    const init = setTimeout(pollWA, 3000);
-    const t = setInterval(pollWA, 30000);
+    // Delay first poll so page data loads first without socket contention
+    const init = setTimeout(pollWA, 8000);
+    const t = setInterval(pollWA, 45000);
     return () => { active = false; clearTimeout(init); clearInterval(t); };
   }, []);
 
@@ -369,7 +379,7 @@ export default function Layout() {
     if (item.type === 'lead') {
       const s = item.meta?.toLowerCase();
       if (s === 'verification') { navigate(`/verification?openId=${item._id}`); return; }
-      if (s === 'follow_up') { navigate(`/follow-up?phone=${encodeURIComponent(item.subtitle || '')}`); return; }
+      if (s === 'follow_up') { navigate(`/shipmaxx/followup?phone=${encodeURIComponent(item.subtitle || '')}`); return; }
       if (item.cnp || s === 'cnp') { navigate(`/cnp?phone=${encodeURIComponent(item.subtitle || '')}`); return; }
       if (s === 'ready_to_shipment') { navigate(`/ready-to-shipment?phone=${encodeURIComponent(item.subtitle || '')}`); return; }
       navigate(`/leads?openId=${item._id}`); return;
@@ -522,9 +532,9 @@ export default function Layout() {
                 className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-full bg-white/75 backdrop-blur-md border border-white/80 shadow-sm hover:shadow-md hover:bg-white/90 transition-all text-left"
               >
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm overflow-hidden flex-shrink-0"
-                  style={user?.avatar ? {} : { background: 'linear-gradient(135deg, #166534, #16a34a)' }}>
-                  {user?.avatar
-                    ? <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
+                  style={user?.avatar && !avatarImgError ? {} : { background: 'linear-gradient(135deg, #166534, #16a34a)' }}>
+                  {user?.avatar && !avatarImgError
+                    ? <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" onError={() => setAvatarImgError(true)} />
                     : initials
                   }
                 </div>
@@ -557,8 +567,10 @@ export default function Layout() {
                         </button>
                         <div className="relative group/avatar cursor-pointer shrink-0" onClick={() => fileInputRef.current?.click()}>
                           <div className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center text-lg font-black text-white ring-2 ring-white/20 shadow-xl"
-                            style={user?.avatar ? {} : { background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
-                            {user?.avatar ? <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" /> : initials}
+                            style={user?.avatar && !avatarImgError ? {} : { background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
+                            {user?.avatar && !avatarImgError ? (
+                              <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" onError={() => setAvatarImgError(true)} />
+                            ) : initials}
                           </div>
                           <div className="absolute inset-0 bg-black/50 rounded-2xl opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center transition-opacity">
                             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -585,7 +597,7 @@ export default function Layout() {
                       <div className="relative mt-4 flex items-center justify-between bg-white/10 rounded-2xl px-3.5 py-2.5 border border-white/10">
                         <div>
                           <p className="text-[8px] font-extrabold text-emerald-300 uppercase tracking-widest">{translate('ACTIVE SHIFT')}</p>
-                          <p className="text-sm font-black text-white tracking-tight font-mono mt-0.5">{shiftTime}</p>
+                          <ShiftTimer checkIn={attStatus?.checkIn} checkOut={attStatus?.checkOut} />
                         </div>
                         <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-full border border-white/10">
                           <span className={`w-1.5 h-1.5 rounded-full ${attStatus?.checkIn && !attStatus?.checkOut ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
@@ -871,8 +883,8 @@ export default function Layout() {
                   </button>
                   {(() => {
                     const s = quickDetail.data.status?.toLowerCase();
-                    const route = s === 'follow_up' || s === 'on_hold' ? '/follow-up' : s === 'cnp' ? '/cnp' : null;
-                    const routeLabel = route === '/follow-up' ? 'Follow Up' : 'CNP';
+                    const route = s === 'follow_up' || s === 'on_hold' ? '/shipmaxx/followup' : s === 'cnp' ? '/cnp' : null;
+                    const routeLabel = route === '/shipmaxx/followup' ? 'ShipMaxx Follow Up' : 'CNP';
                     if (!route) return null;
                     return (
                       <button onClick={() => { setQuickDetail(null); navigate(route); }}

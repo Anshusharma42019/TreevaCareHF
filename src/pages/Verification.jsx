@@ -229,7 +229,7 @@ export default function Verification() {
     }
   }, [activeTab, load, loadOnHold]);
 
-  useAutoRefresh(refreshActiveTab, 15000);
+  useAutoRefresh(refreshActiveTab, 45000);
 
   useEffect(() => {
     if (canManage) {

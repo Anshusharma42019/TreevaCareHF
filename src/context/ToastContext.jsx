@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 
 const ToastContext = createContext(null);
@@ -25,10 +25,10 @@ export function ToastProvider({ children }) {
     return id;
   }, [remove]);
 
-  const success = (msg, title, action) => toast(msg, 'success', title, action);
-  const error = (msg, title, action) => toast(msg, 'error', title, action);
-  const info = (msg, title, action) => toast(msg, 'info', title, action);
-  const warning = (msg, title, action) => toast(msg, 'warning', title, action);
+  const success = useCallback((msg, title, action) => toast(msg, 'success', title, action), [toast]);
+  const error = useCallback((msg, title, action) => toast(msg, 'error', title, action), [toast]);
+  const info = useCallback((msg, title, action) => toast(msg, 'info', title, action), [toast]);
+  const warning = useCallback((msg, title, action) => toast(msg, 'warning', title, action), [toast]);
 
   useEffect(() => {
     const handleApiError = (e) => {
@@ -54,8 +54,18 @@ export function ToastProvider({ children }) {
     return () => window.removeEventListener('api-error', handleApiError);
   }, [toast]);
 
+  const value = useMemo(() => ({
+    toast,
+    showToast: toast,
+    success,
+    error,
+    info,
+    warning,
+    remove,
+  }), [toast, success, error, info, warning, remove]);
+
   return (
-    <ToastContext.Provider value={{ toast, showToast: toast, success, error, info, warning, remove }}>
+    <ToastContext.Provider value={value}>
       {children}
       <ToastContainer toasts={toasts} onRemove={remove} />
     </ToastContext.Provider>

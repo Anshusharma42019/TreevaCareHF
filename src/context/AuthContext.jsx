@@ -4,7 +4,18 @@ import API from '../api';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('crmUser') || 'null'));
+  const [user, setUser] = useState(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem('crmUser') || 'null');
+      if (u && u.avatar && u.avatar.includes('p35g5mw7lxtolklrzuma')) {
+        delete u.avatar;
+        localStorage.setItem('crmUser', JSON.stringify(u));
+      }
+      return u;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     const tokens = JSON.parse(localStorage.getItem('crmTokens') || 'null');

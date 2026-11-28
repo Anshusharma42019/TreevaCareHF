@@ -75,9 +75,7 @@ function AppRoutes() {
         <Route path="appointments" element={
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'doctor', 'support']}><AppointmentBook /></ProtectedRoute>
         } />
-        <Route path="follow-up" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics']}><ShipmaxxFollowup /></ProtectedRoute>
-        } />
+        <Route path="follow-up" element={<Navigate to="/shipmaxx/followup" replace />} />
         <Route path="reorder-commission" element={
           <ProtectedRoute roles={['admin']}>
             <ReorderCommission />

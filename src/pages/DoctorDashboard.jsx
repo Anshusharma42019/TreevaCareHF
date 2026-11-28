@@ -97,12 +97,12 @@ export default function DoctorDashboard() {
     setLoading(true);
     try {
       const [apptsRes, statsRes, verifRes, leadsRes, rtsRes, smxRes, attRes] = await Promise.allSettled([
-        getAppointments({ limit: 300 }),
+        getAppointments({ limit: 60 }),
         fetchStats(todayStr),
-        getVerificationRecords({ limit: 100 }),
-        getLeads({ limit: 100 }),
+        getVerificationRecords({ limit: 40 }),
+        getLeads({ limit: 40 }),
         API.get('/ready-to-shipment'),
-        smxSvc.getOrders({ limit: 100 }),
+        smxSvc.getOrders({ limit: 40 }),
         attendanceSvc.getTodayStatus(),
       ]);
 

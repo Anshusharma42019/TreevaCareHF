@@ -69,22 +69,8 @@ const saveToken = (t) => {
 
 const STEPS = ['Login', 'Create Order', 'Create Shipment (AWB)', 'Generate Label', 'Track Shipment', 'Get Invoice'];
 
-const isExcludedProduct = (o) => {
-  if (!o) return false;
-  const prodItems = o.order_items || o.products || [];
-  const prodStr = (
-    prodItems.map(p => `${p.name || ''} ${p.sku || ''}`).join(' ') + ' ' +
-    (o.medicine || '') + ' ' +
-    (o.title || '') + ' ' +
-    (o.problem || '') + ' ' +
-    JSON.stringify(o.raw_response || '')
-  ).toLowerCase();
-
-  return /migraine|piles|gastro|fissure|fistula|headache/i.test(prodStr);
-};
-
 const getShipmaxxDept = (o) => {
-  if (!o || isExcludedProduct(o)) return 'excluded';
+  if (!o) return 'male';
   const dept = (o.department || o.lead_id?.department || '').toLowerCase();
   if (['male', 'ortho', 'skin'].includes(dept)) return dept;
 
@@ -92,8 +78,7 @@ const getShipmaxxDept = (o) => {
   const prodStr = (
     prodItems.map(p => `${p.name || ''} ${p.sku || ''}`).join(' ') + ' ' +
     (o.medicine || '') + ' ' +
-    (o.title || '') + ' ' +
-    JSON.stringify(o.raw_response || '')
+    (o.title || '')
   ).toLowerCase();
 
   if (/\b(ortho|joint|bone|knee|arthritis|pain|spine|back|joint-pain|orthopaedic)\b/i.test(prodStr)) return 'ortho';
@@ -536,7 +521,7 @@ function OrdersSection() {
     finally { if (!silent) setLoading(false); }
   }, [page, limit, status, fromDate, toDate, search]);
 
-  useAutoRefresh(fetchOrders, 15000);
+  useAutoRefresh(fetchOrders, 45000);
 
   const downloadBulkLabels = async () => {
     const awbs = orders.filter(o => o.awb_code).map(o => o.awb_code);
@@ -1260,7 +1245,7 @@ export default function Shipmaxx() {
     const fetchTodayCount = async () => {
       try {
         const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().split('T')[0];
-        const res = await smxSvc.getOrders({ from: today, to: today, limit: 5000 });
+        const res = await smxSvc.getOrders({ from: today, to: today, limit: 500 });
         const orders = res.data?.data?.data || res.data?.data || [];
         
         let male = [];

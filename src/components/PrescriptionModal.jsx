@@ -32,6 +32,9 @@ const DEFAULT_CLINIC = {
   staffTag: 'Vinay Pal | Dr. Abhinash Gupta',
 };
 
+// Global in-memory cache for user id -> user name resolution to prevent redundant /users/:id requests
+const userCache = new Map();
+
 /* ─── Department Presets ──────────────────────────────────────────────────── */
 export const DEPARTMENT_PRESETS = {
   male: {
@@ -1021,10 +1024,18 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
 
     const fetchUserByIdIfRaw = (rawId) => {
       if (!rawId || !isMongoId(rawId)) return;
+      if (userCache.has(rawId)) {
+        const cachedName = userCache.get(rawId);
+        if (cachedName && !isMongoId(cachedName)) {
+          setPatientInfo((prev) => ({ ...prev, verifierName: cachedName }));
+        }
+        return;
+      }
       API.get(`/users/${rawId}`)
         .then((res) => {
           const u = res.data?.data || res.data;
           if (u?.name && !isMongoId(u.name)) {
+            userCache.set(rawId, u.name);
             setPatientInfo((prev) => ({ ...prev, verifierName: u.name }));
           }
         })
@@ -1086,7 +1097,7 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
 
       setPrescribedMedicines(mList);
 
-      // 2. Dedicated fetch from MongoDB Prescription collection
+      // 2. Optimized Data Fetching: Parallel, targeted, and batched
       const targetId = patientData._id || patientData.id || patientData.pid;
       const leadId = patientData.lead?._id || patientData.lead || patientData.lead_id?._id || patientData.lead_id;
       const taskId = patientData.task?._id || patientData.task;
@@ -1095,100 +1106,127 @@ export default function PrescriptionModal({ isOpen, onClose, patientData }) {
       setSelectedKitNumber(initKit);
       setSelectedKitName(`Kit ${initKit}`);
 
+      // Check if vitals already present in patientData
+      const hasVitals = Boolean(
+        (patientData.age && patientData.age !== '-') ||
+        (patientData.weight && patientData.weight !== '-') ||
+        (patientData.problem) ||
+        (patientData.lead?.age && patientData.lead?.age !== '-') ||
+        (patientData.lead?.problem) ||
+        (patientData.raw?.age && patientData.raw?.age !== '-')
+      );
+
+      let isCancelled = false;
+      const fetchPromises = [];
+
+      // 2a. Fetch prescription from MongoDB (authoritative for Rx, kit number, and clinic history)
       if (targetId || leadId || taskId || cleanMobile) {
-        API.get('/prescriptions/get-by-target', {
-          params: {
-            targetId: targetId ? String(targetId) : undefined,
-            leadId: leadId ? String(leadId) : undefined,
-            taskId: taskId ? String(taskId) : undefined,
-            phone: cleanMobile || undefined,
-            kitNumber: initKit || undefined,
-          },
-        })
-          .then((res) => {
-            const pData = res.data?.data;
-            const fetchedKits = Array.isArray(res.data?.allKits) ? res.data.allKits : (pData ? [pData] : []);
-            setAllKits(fetchedKits);
-
-            if (pData) {
-              setCurrentPrescriptionId(pData._id || null);
-              setCurrentPrescriptionCreatedAt(pData.createdAt || null);
-              setSelectedKitNumber(pData.kitNumber || initKit);
-              setSelectedKitName(pData.kitName || `Kit ${pData.kitNumber || initKit}`);
-
-              if (Array.isArray(pData.prescribedMedicines) && pData.prescribedMedicines.length > 0) {
-                setPrescribedMedicines(pData.prescribedMedicines);
-              }
-              if (Array.isArray(pData.complaints) && pData.complaints.length > 0) {
-                setComplaints(pData.complaints);
-              }
-              const savedDoc = getAssignedDoctorName(pData) || (pData.doctorName && !pData.doctorName.toLowerCase().includes('admin') ? pData.doctorName : null);
-              if (savedDoc) {
-                setClinic((prev) => ({
-                  ...prev,
-                  doctorName: formatDocTitle(savedDoc),
-                  doctorDegree: pData.doctorDegree || prev.doctorDegree,
-                }));
-              }
-              applyVitals(pData);
-            }
+        fetchPromises.push(
+          API.get('/prescriptions/get-by-target', {
+            params: {
+              targetId: targetId ? String(targetId) : undefined,
+              leadId: leadId ? String(leadId) : undefined,
+              taskId: taskId ? String(taskId) : undefined,
+              phone: cleanMobile || undefined,
+              kitNumber: initKit || undefined,
+            },
           })
-          .catch(() => {});
+            .then((res) => ({ type: 'prescription', data: res.data }))
+            .catch(() => null)
+        );
       }
 
-      // 3. Async fetch verification details if targetId exists
-      if (targetId) {
-        API.get(`/verification/${targetId}`)
-          .then((res) => {
-            const v = res.data?.data || res.data;
-            const verifDoc = getAssignedDoctorName(v);
-            if (verifDoc) {
+      // 2b. Only fetch lead details if vitals are genuinely missing from patientData
+      if (!hasVitals && leadId) {
+        fetchPromises.push(
+          API.get(`/leads/${leadId}`)
+            .then((res) => ({ type: 'lead', data: res.data?.data || res.data }))
+            .catch(() => null)
+        );
+      } else if (!hasVitals && cleanMobile && cleanMobile.length >= 10) {
+        // Fallback search only when no leadId is available and vitals are missing
+        fetchPromises.push(
+          API.get('/leads/search-phone', { params: { phone: cleanMobile } })
+            .then((res) => ({ type: 'phoneSearch', data: res.data?.data || res.data }))
+            .catch(() => null)
+        );
+      }
+
+      // 2c. Only fetch verification if explicitly referenced as a verification document
+      const explicitVerificationId = patientData.verificationId || (patientData.type === 'verification' ? targetId : null);
+      if (!hasVitals && explicitVerificationId) {
+        fetchPromises.push(
+          API.get(`/verification/${explicitVerificationId}`)
+            .then((res) => ({ type: 'verification', data: res.data?.data || res.data }))
+            .catch(() => null)
+        );
+      }
+
+      // 3. Coordinate all results in a single pass to eliminate cascading re-renders
+      Promise.all(fetchPromises).then((results) => {
+        if (isCancelled) return;
+
+        let prescriptionResult = null;
+        let fallbackVitalsObj = null;
+
+        for (const res of results) {
+          if (!res) continue;
+          if (res.type === 'prescription') {
+            prescriptionResult = res.data;
+          } else if (res.type === 'lead' || res.type === 'verification') {
+            if (!fallbackVitalsObj) fallbackVitalsObj = res.data;
+          } else if (res.type === 'phoneSearch' && Array.isArray(res.data) && res.data.length > 0) {
+            if (!fallbackVitalsObj) {
+              fallbackVitalsObj = res.data.find((item) => item.age || item.weight || item.occupation || item.problemDuration) || res.data[0];
+            }
+          }
+        }
+
+        // Apply fallback vitals if available
+        if (fallbackVitalsObj) {
+          const doc = getAssignedDoctorName(fallbackVitalsObj);
+          if (doc) {
+            setClinic((prev) => ({ ...prev, doctorName: formatDocTitle(doc) }));
+          }
+          applyVitals(fallbackVitalsObj);
+        }
+
+        // Apply prescription (highest authority)
+        if (prescriptionResult) {
+          const pData = prescriptionResult.data;
+          const fetchedKits = Array.isArray(prescriptionResult.allKits)
+            ? prescriptionResult.allKits
+            : (pData ? [pData] : []);
+          setAllKits(fetchedKits);
+
+          if (pData) {
+            setCurrentPrescriptionId(pData._id || null);
+            setCurrentPrescriptionCreatedAt(pData.createdAt || null);
+            setSelectedKitNumber(pData.kitNumber || initKit);
+            setSelectedKitName(pData.kitName || `Kit ${pData.kitNumber || initKit}`);
+
+            if (Array.isArray(pData.prescribedMedicines) && pData.prescribedMedicines.length > 0) {
+              setPrescribedMedicines(pData.prescribedMedicines);
+            }
+            if (Array.isArray(pData.complaints) && pData.complaints.length > 0) {
+              setComplaints(pData.complaints);
+            }
+            const savedDoc = getAssignedDoctorName(pData) || (pData.doctorName && !pData.doctorName.toLowerCase().includes('admin') ? pData.doctorName : null);
+            if (savedDoc) {
               setClinic((prev) => ({
                 ...prev,
-                doctorName: formatDocTitle(verifDoc),
+                doctorName: formatDocTitle(savedDoc),
+                doctorDegree: pData.doctorDegree || prev.doctorDegree,
               }));
             }
-            applyVitals(v);
-          })
-          .catch(() => {});
-      }
+            applyVitals(pData);
+          }
+        }
+      });
 
-      // 4. Async fetch lead details directly if leadId exists
-      if (leadId) {
-        API.get(`/leads/${leadId}`)
-          .then((res) => {
-            const l = res.data?.data || res.data;
-            const leadDoc = getAssignedDoctorName(l);
-            if (leadDoc) {
-              setClinic((prev) => ({
-                ...prev,
-                doctorName: formatDocTitle(leadDoc),
-              }));
-            }
-            applyVitals(l);
-          })
-          .catch(() => {});
-      }
-
-      // 5. Async search lead by phone number to get exact Sales Team entry
-      if (cleanMobile && cleanMobile.length >= 10) {
-        API.get('/leads/search-phone', { params: { phone: cleanMobile } })
-          .then((res) => {
-            const list = res.data?.data || res.data;
-            if (Array.isArray(list) && list.length > 0) {
-              const foundLead = list.find((item) => item.age || item.weight || item.occupation || item.problemDuration) || list[0];
-              const phoneLeadDoc = getAssignedDoctorName(foundLead);
-              if (phoneLeadDoc) {
-                setClinic((prev) => ({
-                  ...prev,
-                  doctorName: formatDocTitle(phoneLeadDoc),
-                }));
-              }
-              applyVitals(foundLead);
-            }
-          })
-          .catch(() => {});
-      }
+      return () => {
+        isCancelled = true;
+      };
     } else {
       applyDepartmentPreset('male');
       setPrescribedMedicines([]);

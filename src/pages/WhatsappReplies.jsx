@@ -185,7 +185,7 @@ export default function ShipmaxxFollowup() {
     if (showCompleted) loadCompleted(silent, completedPage, search);
   }, [load, loadCompleted, showCompleted, completedPage, search]);
 
-  useAutoRefresh(autoFetch, 15000);
+  useAutoRefresh(autoFetch, 45000);
 
   useEffect(() => {
     load(false).then(() => loadCompleted(false, 1));

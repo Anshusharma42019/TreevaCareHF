@@ -135,7 +135,7 @@ export default function Pipeline() {
       setError('');
     }
     try {
-      const q = { limit: 200 };
+      const q = { limit: 60 };
       if (department) q.department = department;
       const mq = { ...q, month: monthFilter };
 

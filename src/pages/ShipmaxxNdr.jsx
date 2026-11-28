@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as smxSvc from '../services/shipmaxx.service';
 import OrderStatusBoard from '../components/OrderStatusBoard';
@@ -128,6 +128,12 @@ function NdrList({ department: externalDept, setDepartment: externalSetDept, onS
   const [attempt, setAttempt] = useState('all');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 30;
+
+  useEffect(() => {
+    setPage(1);
+  }, [department, attempt, search]);
 
   const fetchNDR = useCallback((f = from, t = to) => {
     setLoading(true);
@@ -171,31 +177,47 @@ function NdrList({ department: externalDept, setDepartment: externalSetDept, onS
     return dept || 'male';
   };
 
-  const safeNdrs = Array.isArray(ndrs) ? ndrs : [];
-  const filtered = safeNdrs.filter(n => {
-    if (department !== 'all') {
-      const d = getDept(n);
-      if (department !== d) return false;
-    }
-    if (attempt !== 'all') {
-      const a = Number(n.attempts ?? 1);
-      if (attempt === '4+' ? a < 4 : a !== Number(attempt)) return false;
-    }
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        (n.awb_code || '').toLowerCase().includes(q) ||
-        (n.customer_name || '').toLowerCase().includes(q) ||
-        (n.channel_order_id || '').toLowerCase().includes(q) ||
-        (n.reason || '').toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  const safeNdrs = useMemo(() => Array.isArray(ndrs) ? ndrs : [], [ndrs]);
 
-  const maleCount = safeNdrs.filter(n => getDept(n) === 'male').length;
-  const orthoCount = safeNdrs.filter(n => getDept(n) === 'ortho').length;
-  const skinCount = safeNdrs.filter(n => getDept(n) === 'skin').length;
+  const { maleCount, orthoCount, skinCount } = useMemo(() => {
+    let m = 0, o = 0, s = 0;
+    for (const n of safeNdrs) {
+      const d = getDept(n);
+      if (d === 'male') m++;
+      else if (d === 'ortho') o++;
+      else if (d === 'skin') s++;
+    }
+    return { maleCount: m, orthoCount: o, skinCount: s };
+  }, [safeNdrs]);
+
+  const filtered = useMemo(() => {
+    return safeNdrs.filter(n => {
+      if (department !== 'all') {
+        const d = getDept(n);
+        if (department !== d) return false;
+      }
+      if (attempt !== 'all') {
+        const a = Number(n.attempts ?? 1);
+        if (attempt === '4+' ? a < 4 : a !== Number(attempt)) return false;
+      }
+      if (search) {
+        const q = search.toLowerCase();
+        return (
+          (n.awb_code || '').toLowerCase().includes(q) ||
+          (n.customer_name || '').toLowerCase().includes(q) ||
+          (n.channel_order_id || '').toLowerCase().includes(q) ||
+          (n.reason || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [safeNdrs, department, attempt, search]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const paginatedList = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
 
   if (detail) {
     return (
@@ -312,8 +334,8 @@ function NdrList({ department: externalDept, setDepartment: externalSetDept, onS
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map((n, i) => (
-                  <tr key={i} className="hover:bg-gray-50/60 transition-colors">
+                {paginatedList.map((n, i) => (
+                  <tr key={n.awb_code || i} className="hover:bg-gray-50/60 transition-colors">
                     <td className="px-4 py-3">
                       <a href={getTrackingUrl(n)} target="_blank" rel="noreferrer"
                         className="font-mono text-[11px] text-blue-600 font-bold hover:underline">
@@ -361,8 +383,8 @@ function NdrList({ department: externalDept, setDepartment: externalSetDept, onS
 
             {/* Mobile cards */}
             <div className="sm:hidden divide-y divide-gray-50">
-              {filtered.map((n, i) => (
-                <div key={i} className="p-4 space-y-3">
+              {paginatedList.map((n, i) => (
+                <div key={n.awb_code || i} className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-bold text-gray-900 text-sm truncate">{n.customer_name?.trim() || 'Unknown'}</p>
@@ -388,6 +410,34 @@ function NdrList({ department: externalDept, setDepartment: externalSetDept, onS
                 </div>
               ))}
             </div>
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/50">
+                <span className="text-xs text-gray-500 font-medium">
+                  Showing {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, filtered.length)} of {filtered.length} records
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40 transition"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs font-bold text-gray-600">
+                    Page {page} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40 transition"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -816,7 +866,7 @@ export default function ShipmaxxNdr() {
           platform="shipmaxx"
           title="ShipMaxx Orders Status Board"
           department={department}
-          defaultPreset="all"
+          defaultPreset="month"
           defaultStatus="IN_TRANSIT"
           allowedStatuses={[
             'NEW',

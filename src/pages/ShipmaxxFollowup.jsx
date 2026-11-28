@@ -316,10 +316,10 @@ export default function ShipmaxxFollowup() {
     if (showCompleted) loadCompleted(silent, completedPage, search);
   }, [load, loadCompleted, showCompleted, completedPage, search]);
 
-  useAutoRefresh(autoFetch, 15000);
+  useAutoRefresh(autoFetch, 45000);
 
   useEffect(() => {
-    load(false).then(() => loadCompleted(false, 1));
+    Promise.all([load(false), loadCompleted(false, 1)]);
   }, [load, loadCompleted]);
 
   // Fetch ALL booked orders for the searched phone (unlimited — Kit 3,4,5,6... all included)
@@ -632,14 +632,12 @@ export default function ShipmaxxFollowup() {
     }).catch(() => {});
   };
 
-  const ALLOWED_DEPTS = ['male', 'ortho', 'skin', 'migraine', 'piles'];
+  const ALLOWED_DEPTS = ['male', 'ortho', 'skin'];
 
   const detectDept = (o) => {
     if (o.department && ALLOWED_DEPTS.includes(o.department.toLowerCase())) return o.department.toLowerCase();
     if (o.lead_id?.department && ALLOWED_DEPTS.includes(o.lead_id.department.toLowerCase())) return o.lead_id.department.toLowerCase();
     const prodStr = ((o.order_items || []).map(p => p.name || '').join(' ') + ' ' + (o.verification_problem || o.problem || o.lead_id?.problem || '')).toLowerCase();
-    if (/migraine/i.test(prodStr)) return 'migraine';
-    if (/piles/i.test(prodStr)) return 'piles';
     if (/\b(male|men|man|sexual|erectile|testosterone|prostate|semen|penis|ed|nightfall|sperm|discharge)\b/i.test(prodStr)) return 'male';
     if (/\b(ortho|joint|knee|bone|fracture|arthritis|spine|back pain|shoulder|ligament|gout)\b/i.test(prodStr)) return 'ortho';
     if (/\b(skin|acne|pimple|rash|eczema|psoriasis|derma|pigmentation|face)\b/i.test(prodStr)) return 'skin';
@@ -1002,8 +1000,6 @@ export default function ShipmaxxFollowup() {
             <option value="male">MALE ({activeOrders.filter(o => detectDept(o) === 'male').length})</option>
             <option value="skin">SKIN ({activeOrders.filter(o => detectDept(o) === 'skin').length})</option>
             <option value="ortho">ORTHO ({activeOrders.filter(o => detectDept(o) === 'ortho').length})</option>
-            <option value="migraine">MIGRAINE ({activeOrders.filter(o => detectDept(o) === 'migraine').length})</option>
-            <option value="piles">PILES ({activeOrders.filter(o => detectDept(o) === 'piles').length})</option>
           </select>
 
           <select
